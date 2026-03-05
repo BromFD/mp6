@@ -1,0 +1,63 @@
+import 'package:chuni_player_revamped/provider/provider.dart';
+import 'package:flutter/material.dart';
+import 'package:chuni_player_revamped/custom_widgets.dart';
+import 'package:provider/provider.dart';
+
+class Playlist extends StatelessWidget {
+  const Playlist({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final provider = context.watch<PlayerProvider>();
+    final backgroundColor = provider.colorScheme["background"];
+    final iconColor = provider.colorScheme["icon"];
+    final textColor = provider.colorScheme["text"];
+
+    return Scaffold(
+      backgroundColor: backgroundColor,
+      appBar: AppBar(
+        title: Center(child: Text("Плейлисты", style: TextStyle(color: textColor))),
+        backgroundColor: backgroundColor,
+        iconTheme: IconThemeData(
+          color: iconColor,
+        ),
+        leading: IconButton(
+          onPressed: () {
+            Navigator.pushNamed(context, "/");
+          },
+          icon: Icon(Icons.arrow_back),
+        ),
+      ),
+      body: SafeArea(
+        child: ListView.separated(
+            itemBuilder: (BuildContext context, int index) {
+              return PlaylistTile(
+                  textColor: textColor!,
+                  iconColor: iconColor!,
+                  context: context,
+                  index: index
+              );
+            },
+            itemCount: provider.playlists.isEmpty ? 0 : provider.playlists.length,
+          separatorBuilder: (BuildContext context, int index) {
+              return Padding(padding: EdgeInsetsGeometry.symmetric(vertical: 0.015 * screenHeight));
+          },
+        )
+      ),
+      floatingActionButton: FloatingActionButton.large(
+        onPressed: () {
+          showDialog(
+              context: context,
+              builder: (context) {
+                return PlaylistCreationAlertDialog(context: context);
+              }
+          );
+        },
+        child: Icon(Icons.add, color: iconColor,),
+
+      )
+    );
+  }
+}
