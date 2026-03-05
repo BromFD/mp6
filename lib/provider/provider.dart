@@ -26,8 +26,8 @@ class PlayerProvider extends ChangeNotifier {
   bool isUserMakingPlaylist = false; // Используется для того, чтобы реюзнуть страницу медиатеки, для выбора песен в плейлисте.
   String currentPlaylist = ""; // Текущий выбранный плейлист
   List<AudioSource> filteredSources = []; // Отфильтрованные по названию песни
-  bool wasSearchMode = false;
-  bool isSearchMode = false;
+  bool isSearchMode = false; // Показывает использовал ли пользователь поиск
+  Map<int, int> indexesOfSearchedAudios = {}; // Индекс найденного поиском трека в его плейлисте
 
   PlayerProvider() { // Срабатывает на старте
     onLaunch();
@@ -271,18 +271,22 @@ class PlayerProvider extends ChangeNotifier {
     isSearchMode = true;
     if (name != "") {
       List<int> currentPlaylistIndexes = playlists[currentPlaylist]!;
-      filteredSources = [for (var sourceIndex in currentPlaylistIndexes)
-        if ((audioFiles[sourceIndex]["name"].toLowerCase()).contains(name.toLowerCase()))
-          AudioSource.uri(Uri.parse(audioFiles[sourceIndex]["url"]),
-              tag: MediaItem(
-                id: '$sourceIndex',
-                title: audioFiles[sourceIndex]["name"],
+      filteredSources = [];
+      int index = 0;
+      for (var sourceIndex in currentPlaylistIndexes) {
+        if ((audioFiles[sourceIndex]["name"].toLowerCase()).contains(name.toLowerCase())){
+          filteredSources.add(AudioSource.uri(Uri.parse(audioFiles[sourceIndex]["url"]),
+            tag: MediaItem(
+              id: '$sourceIndex',
+              title: audioFiles[sourceIndex]["name"],
+              ),
             ),
-          )
-        ];
+          );
+          indexesOfSearchedAudios[sourceIndex] = index;
+        }
+        index++;
+      }
       audioSources = filteredSources;
-      await player.setAudioSources(audioSources, initialIndex: 0, initialPosition: Duration.zero,
-          shuffleOrder: DefaultShuffleOrder());
     } else {
       audioSources = [for (var sourceIndex in playlists[currentPlaylist]!)
         AudioSource.uri(Uri.parse(audioFiles[sourceIndex]["url"]),
@@ -292,8 +296,6 @@ class PlayerProvider extends ChangeNotifier {
           ),
         ),
       ];
-      await player.setAudioSources(audioSources, initialIndex: 0, initialPosition: Duration.zero,
-          shuffleOrder: DefaultShuffleOrder());
     }
     notifyListeners();
   }

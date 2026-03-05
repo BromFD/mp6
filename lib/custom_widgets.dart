@@ -244,18 +244,15 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
             ),
             onTap: () async {
 
-              // Система переключателей режима поиска, сделанная таким образом, чтобы при выборе песни список восстанавливал прежнее состояние и при следующем выборе обновлял аудиосурсы.
-
-              if (provider.wasSearchMode) {
-                provider.wasSearchMode = false;
-
-                await provider.player.setAudioSources(provider.audioSources, initialIndex: 0, initialPosition: Duration.zero,
-                    shuffleOrder: DefaultShuffleOrder());
-              }
+              widget.isUserMakingPlaylist ? (isSelected ? provider.removeAudioFromPlaylist(widget.index) : provider.addAudioToPlaylist(widget.index))
+                  : provider.isSearchMode ? null : provider.setAudioFile(widget.index);
+              setState(() {
+                widget.isUserMakingPlaylist ? (isSelected ? isSelected = false : isSelected = true) : null;
+              });
 
               if (provider.isSearchMode) {
+                await Future.delayed(Duration(milliseconds: 500));
                 provider.isSearchMode = false;
-                provider.wasSearchMode = true;
                 provider.audioSources = [for (var sourceIndex in provider.playlists[provider.currentPlaylist]!)
                   AudioSource.uri(Uri.parse(provider.audioFiles[sourceIndex]["url"]),
                     tag: MediaItem(
@@ -264,13 +261,8 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
                     ),
                   )
                 ];
+                provider.setAudioFile(provider.indexesOfSearchedAudios[globalIndex]!);
               }
-
-              widget.isUserMakingPlaylist ? (isSelected ? provider.removeAudioFromPlaylist(widget.index) : provider.addAudioToPlaylist(widget.index))
-                  : provider.setAudioFile(widget.index);
-              setState(() {
-                widget.isUserMakingPlaylist ? (isSelected ? isSelected = false : isSelected = true) : null;
-              });
             },
           ),
         );
