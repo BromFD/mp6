@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:provider/provider.dart';
 import 'package:chuni_player_revamped/provider/provider.dart';
 import 'package:marquee/marquee.dart';
@@ -241,7 +242,30 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
                 ],
               ),
             ),
-            onTap: () {
+            onTap: () async {
+
+              // Система переключателей режима поиска, сделанная таким образом, чтобы при выборе песни список восстанавливал прежнее состояние и при следующем выборе обновлял аудиосурсы.
+
+              if (provider.wasSearchMode) {
+                provider.wasSearchMode = false;
+
+                await provider.player.setAudioSources(provider.audioSources, initialIndex: 0, initialPosition: Duration.zero,
+                    shuffleOrder: DefaultShuffleOrder());
+              }
+
+              if (provider.isSearchMode) {
+                provider.isSearchMode = false;
+                provider.wasSearchMode = true;
+                provider.audioSources = [for (var sourceIndex in provider.playlists[provider.currentPlaylist]!)
+                  AudioSource.uri(Uri.parse(provider.audioFiles[sourceIndex]["url"]),
+                    tag: MediaItem(
+                      id: '$sourceIndex',
+                      title: provider.audioFiles[sourceIndex]["name"],
+                    ),
+                  )
+                ];
+              }
+
               widget.isUserMakingPlaylist ? (isSelected ? provider.removeAudioFromPlaylist(widget.index) : provider.addAudioToPlaylist(widget.index))
                   : provider.setAudioFile(widget.index);
               setState(() {

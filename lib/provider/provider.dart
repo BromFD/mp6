@@ -26,6 +26,7 @@ class PlayerProvider extends ChangeNotifier {
   bool isUserMakingPlaylist = false; // Используется для того, чтобы реюзнуть страницу медиатеки, для выбора песен в плейлисте.
   String currentPlaylist = ""; // Текущий выбранный плейлист
   List<AudioSource> filteredSources = []; // Отфильтрованные по названию песни
+  bool wasSearchMode = false;
   bool isSearchMode = false;
 
   PlayerProvider() { // Срабатывает на старте
@@ -282,16 +283,15 @@ class PlayerProvider extends ChangeNotifier {
       audioSources = filteredSources;
       await player.setAudioSources(audioSources, initialIndex: 0, initialPosition: Duration.zero,
           shuffleOrder: DefaultShuffleOrder());
-
     } else {
       audioSources = [for (var sourceIndex in playlists[currentPlaylist]!)
         AudioSource.uri(Uri.parse(audioFiles[sourceIndex]["url"]),
-            tag: MediaItem(
-              id: '$sourceIndex',
-              title: audioFiles[sourceIndex]["name"],
-            ),
-          )
-        ];
+          tag: MediaItem(
+            id: '$sourceIndex',
+            title: audioFiles[sourceIndex]["name"],
+          ),
+        ),
+      ];
       await player.setAudioSources(audioSources, initialIndex: 0, initialPosition: Duration.zero,
           shuffleOrder: DefaultShuffleOrder());
     }
