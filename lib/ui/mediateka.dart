@@ -40,7 +40,12 @@ class _MediatekaState extends State<Mediateka> {
         ),
         title: Center(child: Text(isUserMakingPlaylist ? "Выбрано(${provider.audioSourcesIndexes.length})" : "Медиатека", style: TextStyle(color: textColor))),
         backgroundColor: backgroundColor,
-        automaticallyImplyLeading: !provider.isUserMakingPlaylist,
+        leading: provider.isUserMakingPlaylist ? SizedBox.shrink() : IconButton(
+          onPressed: () {
+            Navigator.pushNamed(context, "/");
+          },
+          icon: Icon(Icons.arrow_back),
+        ),
       ),
       body: SafeArea(
           child: Column(
@@ -137,6 +142,7 @@ class _MediatekaState extends State<Mediateka> {
                     padding: EdgeInsets.all(screenWidth * 0.05),
                     child: TextButton(
                         onPressed: () {
+                          provider.denyCreation();
                           Navigator.pushNamedAndRemoveUntil(context, "/playlist", (route) => false);
                           provider.switchPlaylistCreationFlag();
                           provider.clearIds();

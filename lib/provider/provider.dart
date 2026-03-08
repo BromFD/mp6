@@ -22,12 +22,15 @@ class PlayerProvider extends ChangeNotifier {
   Map<String, Color> colorScheme = {};  // Отвечает за цветовую схему которую пользователь выбирает в настройках
   final AudioPlayer player = AudioPlayer(); // Экземпляр класса AudioPlayer
   Map<String, dynamic>? currentAudioFile; // Текущий включенный трек и его метаданные
-  Map<String, List<int>> playlists = {};
+  Map<String, List<int>> playlists = {}; // Хранит плейлисты
   bool isUserMakingPlaylist = false; // Используется для того, чтобы реюзнуть страницу медиатеки, для выбора песен в плейлисте.
+  bool isUserAddToExistingPlaylist = false; // Используется для того, чтобы реюзнуть страницу плейлистов, для выбора плейлиста куда пользователь захочет добавить песню.
+  List<dynamic> addedAudio = []; // Хранит данные о том куда и что добавлять в плейлист
   String currentPlaylist = ""; // Текущий выбранный плейлист
   List<AudioSource> filteredSources = []; // Отфильтрованные по названию песни
   bool isSearchMode = false; // Показывает использовал ли пользователь поиск
   Map<int, int> indexesOfSearchedAudios = {}; // Индекс найденного поиском трека в его плейлисте
+
 
   PlayerProvider() { // Срабатывает на старте
     onLaunch();
@@ -214,13 +217,13 @@ class PlayerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Добавляет аудио в плейлист
+  // Добавляет индекс в плейлист в процессе создания
   void addAudioToPlaylist(int index) {
     audioSourcesIndexes.add(index);
     notifyListeners();
   }
 
-  // Убирает индекс из списка
+  // Убирает индекс из плейлиста в процессе создания
   void removeAudioFromPlaylist(int index) {
     audioSourcesIndexes.remove(index);
     notifyListeners();
@@ -257,6 +260,28 @@ class PlayerProvider extends ChangeNotifier {
     )];
     await player.setAudioSources(audioSources, initialIndex: 0, initialPosition: Duration.zero,
         shuffleOrder: DefaultShuffleOrder());
+    notifyListeners();
+  }
+
+  // Добавляет аудио в уже созданный плейлист
+  void addToExistingPlaylist() {
+    playlists[addedAudio[1]]!.add(addedAudio[0]);
+    addedAudio = [];
+    addItemToBox(playlists, "playlist");
+    notifyListeners();
+  }
+
+  // Удаляет аудио из текущего плейлиста
+  Future<void> removeFromExistingPlaylist(int audioId) async {
+    playlists[currentPlaylist]!.remove(audioId);
+
+    addItemToBox(playlists, "playlist");
+    notifyListeners();
+  }
+
+  // Тут понятно из названия и содержания
+  void switchAddToExistingPlaylistFlag() {
+    isUserAddToExistingPlaylist ? isUserAddToExistingPlaylist = false : isUserAddToExistingPlaylist = true;
     notifyListeners();
   }
 

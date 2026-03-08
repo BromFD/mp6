@@ -231,10 +231,40 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
                     width: width * 0.1,
                     child: FittedBox(
                       fit: BoxFit.contain,
-                      child:  IconButton(
+                      child: provider.isUserMakingPlaylist ? SizedBox.shrink() :
+                      IconButton(
                         icon: Icon(Icons.more_vert, color: widget.iconColor,),
                         onPressed: () {
-                          // Когда буду что-то добавлять принять во внимание создание плейлистов
+                          showDialog(
+                              context: context,
+                              builder: (context) {
+                                return AlertDialog(
+                                  title: Text("Настройки аудио"),
+                                  actions: [
+
+                                    Column(
+                                      children: [
+                                        TextButton(
+                                            onPressed: (){
+                                              provider.addedAudio.add(globalIndex);
+                                              provider.switchAddToExistingPlaylistFlag();
+                                              Navigator.pushNamed(context, "/playlist");
+                                            },
+                                            child: Text("Добавить аудио в плейлист", style: TextStyle(color: Colors.black),)
+                                        ),
+
+                                        provider.currentPlaylist != "main" ? TextButton(
+                                            onPressed: () async {
+                                              await provider.removeFromExistingPlaylist(globalIndex);
+                                            },
+                                            child: Text("Удалить аудио из плейлиста", style: TextStyle(color: Colors.black),)
+                                        ) : SizedBox.shrink(),
+                                      ],
+                                    ),
+                                  ],
+                                );
+                              }
+                          );
                         },
                       )
                     ),
@@ -262,6 +292,7 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
                   )
                 ];
                 provider.setAudioFile(provider.indexesOfSearchedAudios[globalIndex]!);
+                provider.indexesOfSearchedAudios = {};
               }
             },
           ),
@@ -532,10 +563,12 @@ class _PlaylistTileState extends State<PlaylistTile> {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     final String name = provider.playlists.keys.elementAt(widget.index);
+    final isUserAddToExistingPlaylist = provider.isUserAddToExistingPlaylist;
     return ListTile(
       leading: Icon(Icons.playlist_play, color: widget.iconColor, size: screenHeight * 0.05,),
       title: Text(name, style: TextStyle(color: widget.textColor, fontSize: screenHeight * 0.025),),
-      trailing: IconButton(
+      trailing: isUserAddToExistingPlaylist ? SizedBox.shrink() :
+      IconButton(
           onPressed: () {
             showDialog(
                 context: context,
@@ -645,8 +678,16 @@ class _PlaylistTileState extends State<PlaylistTile> {
           icon: Icon(Icons.more_vert, color: widget.iconColor, size: screenHeight * 0.05,)
       ),
       onTap: () async {
-        await provider.setCurrentPlaylist(name);
-        Navigator.pushNamed(widget.context, "/mediateka");
+
+        if (isUserAddToExistingPlaylist) {
+          provider.addedAudio.add(name);
+          provider.addToExistingPlaylist();
+          Navigator.pushNamedAndRemoveUntil(widget.context, "/mediateka", (route) => false);
+          provider.switchAddToExistingPlaylistFlag();
+        } else {
+          await provider.setCurrentPlaylist(name);
+          Navigator.pushNamed(widget.context, "/mediateka");
+        }
       },
     );
   }

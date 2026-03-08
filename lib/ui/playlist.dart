@@ -11,6 +11,7 @@ class Playlist extends StatelessWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     final provider = context.watch<PlayerProvider>();
+    final isUserAddToExistingPlaylist = provider.isUserAddToExistingPlaylist;
     final backgroundColor = provider.colorScheme["background"];
     final iconColor = provider.colorScheme["icon"];
     final textColor = provider.colorScheme["text"];
@@ -23,7 +24,8 @@ class Playlist extends StatelessWidget {
         iconTheme: IconThemeData(
           color: iconColor,
         ),
-        leading: IconButton(
+        leading: isUserAddToExistingPlaylist ? SizedBox.shrink() :
+        IconButton(
           onPressed: () {
             Navigator.pushNamed(context, "/");
           },
@@ -46,7 +48,8 @@ class Playlist extends StatelessWidget {
           },
         )
       ),
-      floatingActionButton: FloatingActionButton.large(
+      floatingActionButton: isUserAddToExistingPlaylist ? SizedBox.shrink() :
+      FloatingActionButton.large(
         onPressed: () {
           showDialog(
               context: context,
