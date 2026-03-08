@@ -13,7 +13,7 @@ class PlayerProvider extends ChangeNotifier {
   List<String> audioFilesPaths = []; // Пути к файлам внутри папки с музыкой
   List<Map<String, dynamic>> audioFiles = []; // Список аудиофайлов с метаданными
   List<AudioSource> audioSources = []; // Список текущих треков с которыми будет работать аудио плеер (UI тоже будет полагатся на него)
-  List<int> audioSourcesIndexes = []; // Индексы audioSources которые будут добавлены в плейлист
+  Set<int> audioSourcesIndexes = {}; // Индексы audioSources которые будут добавлены в плейлист
   Map<String, int> colorSchemeHexCodes = { // Hex коды цветовой схемы, нужны т.к Hive не хранит объекты типа Color
     "background": 0xFF000000,
     "icon": 0xFF9C27B0,
@@ -22,7 +22,7 @@ class PlayerProvider extends ChangeNotifier {
   Map<String, Color> colorScheme = {};  // Отвечает за цветовую схему которую пользователь выбирает в настройках
   final AudioPlayer player = AudioPlayer(); // Экземпляр класса AudioPlayer
   Map<String, dynamic>? currentAudioFile; // Текущий включенный трек и его метаданные
-  Map<String, List<int>> playlists = {}; // Хранит плейлисты
+  Map<String, Set<int>> playlists = {}; // Хранит плейлисты
   bool isUserMakingPlaylist = false; // Используется для того, чтобы реюзнуть страницу медиатеки, для выбора песен в плейлисте.
   bool isUserAddToExistingPlaylist = false; // Используется для того, чтобы реюзнуть страницу плейлистов, для выбора плейлиста куда пользователь захочет добавить песню.
   List<dynamic> addedAudio = []; // Хранит данные о том куда и что добавлять в плейлист
@@ -145,7 +145,7 @@ class PlayerProvider extends ChangeNotifier {
 
   // Задание списка всех треков для управления
   Future<void> createMainList () async {
-    audioSourcesIndexes = [for (var index = 0; index < audioFiles.length; index++) index];
+    audioSourcesIndexes = {for (var index = 0; index < audioFiles.length; index++) index};
     playlists["main"] = audioSourcesIndexes;
     currentPlaylist = "main";
     audioSources = [for (var index in audioSourcesIndexes) AudioSource.uri(Uri.parse(audioFiles[index]["url"]),
@@ -192,8 +192,8 @@ class PlayerProvider extends ChangeNotifier {
 
   // Создаёт новый плейлист
   void createPlaylist(String name) {
-    playlists[name] = [];
-    audioSourcesIndexes = [];
+    playlists[name] = {};
+    audioSourcesIndexes = {};
     notifyListeners();
   }
 
@@ -232,14 +232,14 @@ class PlayerProvider extends ChangeNotifier {
   // Добавляет индексы треков в плейлист
   void addSourcesToPlaylist() {
     playlists[playlists.keys.last] = audioSourcesIndexes;
-    audioSourcesIndexes = [];
+    audioSourcesIndexes = {};
     addItemToBox(playlists, "playlist");
     notifyListeners();
   }
 
   // Очищает списки id
   void clearIds() {
-    audioSourcesIndexes = [];
+    audioSourcesIndexes = {};
     notifyListeners();
   }
 
@@ -274,7 +274,19 @@ class PlayerProvider extends ChangeNotifier {
   // Удаляет аудио из текущего плейлиста
   Future<void> removeFromExistingPlaylist(int audioId) async {
     playlists[currentPlaylist]!.remove(audioId);
-
+    int index = 0;
+    int? removeIndex;
+    List<AudioSource> tempSources = [];
+    for (var (source as IndexedAudioSource) in audioSources){
+      if (int.parse(source.tag.id) != audioId) {
+        tempSources.add(source);
+      } else {
+        removeIndex = index;
+      }
+      index++;
+    }
+    audioSources = tempSources;
+    player.removeAudioSourceAt(removeIndex!);
     addItemToBox(playlists, "playlist");
     notifyListeners();
   }
@@ -295,7 +307,7 @@ class PlayerProvider extends ChangeNotifier {
   Future<void> showOnlySearched(String name) async {
     isSearchMode = true;
     if (name != "") {
-      List<int> currentPlaylistIndexes = playlists[currentPlaylist]!;
+      Set<int> currentPlaylistIndexes = playlists[currentPlaylist]!;
       filteredSources = [];
       int index = 0;
       for (var sourceIndex in currentPlaylistIndexes) {
@@ -354,6 +366,12 @@ class PlayerProvider extends ChangeNotifier {
 
   void addItemToBox(dynamic item, String key) {
     final box = Hive.box("playerData");
+    if (key == "playlist") {
+      item = {
+        for (var playlist in item.entries)
+          playlist.key : List<int>.from(playlist.value)
+      };
+    }
     box.put(key, item);
   }
 
@@ -373,7 +391,7 @@ class PlayerProvider extends ChangeNotifier {
     if (object == "playlist") {
       original = {
         for (var playlist in (raw as Map).entries)
-          playlist.key.toString(): [for (var index in (playlist.value as List<int>)) index]
+          playlist.key.toString(): {for (var index in (playlist.value as List<int>)) index}
       };
     }
 
