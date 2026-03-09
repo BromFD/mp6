@@ -14,12 +14,15 @@ class Mediateka extends StatefulWidget {
 
 class _MediatekaState extends State<Mediateka> {
   late final TextEditingController searchController;
+  late final TextEditingController timeController;
 
   @override
   void initState() {
     // TODO: implement initState
     super.initState();
     searchController = TextEditingController();
+    timeController = TextEditingController();
+
   }
 
   @override
@@ -34,6 +37,73 @@ class _MediatekaState extends State<Mediateka> {
     final bool isUserMakingPlaylist = provider.isUserMakingPlaylist;
     return Scaffold(
       backgroundColor: backgroundColor,
+      endDrawer: Drawer(
+        width: screenWidth,
+        backgroundColor: backgroundColor,
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.05),
+          child: ListView(
+            children: [
+
+              SizedBox(
+                height: screenHeight * 0.1,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+
+                    Icon(Icons.alarm, color: iconColor,),
+                    Text("Установить таймер на", style: TextStyle(color: textColor),),
+                    SizedBox(
+                        width: screenWidth * 0.075,
+                        child: TextField(
+                          controller: timeController,
+                          style: TextStyle(color: textColor),
+                          cursorColor: textColor,
+                          decoration: InputDecoration(
+                            border: UnderlineInputBorder(
+                              borderSide: BorderSide(color: textColor!),
+                            ),
+                            focusedBorder: UnderlineInputBorder(
+                              borderSide: BorderSide(color: textColor),
+                            ),
+                          ),
+                        ),
+                      ),
+                    Text("минут", style: TextStyle(color: textColor),),
+                    IconButton(
+                        onPressed: () {
+                          if (int.tryParse(timeController.text) != null) {
+                            provider.setSleepTimer(int.parse(timeController.text));
+                            showNotification(context, "Таймер сна установлен на ${timeController.text} минут");
+                            timeController.clear();
+                          } else {
+                            showNotification(context, "Молодец, тестировщик");
+                            timeController.clear();
+                          }
+                        },
+                        icon: Icon(Icons.check, color: iconColor,),
+                    ),
+                    IconButton(
+                      onPressed: () {
+                        provider.denySleepTimer();
+                        showNotification(context, "Текущий таймер сна отменён");
+                      },
+                      icon: Icon(Icons.close, color: iconColor,),
+                    ),
+                  ],
+                ),
+              ),
+
+              VolumeSlider(
+                  context: context,
+                  iconColor: iconColor!,
+                  textColor: textColor,
+              )
+
+            ],
+          ),
+        ),
+      ),
       appBar: AppBar(
         iconTheme: IconThemeData(
           color: iconColor,
@@ -64,18 +134,30 @@ class _MediatekaState extends State<Mediateka> {
 
                       Row(
                         children: [
+
                           IconButton(
                               onPressed: (){
                                 provider.switchShuffle(true);
+                                showNotification(context, "Включено рандомное воспроизведение");
                               },
                               icon: Icon(Icons.shuffle, color: iconColor,)),
 
                           IconButton(
                               onPressed: (){
                                 provider.switchShuffle(false);
+                                showNotification(context, "Рандомное воспроизведение выключено");
                               },
                               icon: Icon(Icons.swap_vert, color: iconColor,)),
+
+                          IconButton(
+                              onPressed: (){
+                                provider.switchShuffle(false);
+                                provider.setLoopMode(provider.player.loopMode == LoopMode.all ? LoopMode.off : LoopMode.all);
+                                showNotification(context, provider.player.loopMode == LoopMode.all ? "Включён цикличный режим воспроизведения" : "Цикличный режим воспроизведения выключен");
+                              },
+                              icon: Icon(Icons.loop, color: iconColor,)),
                         ],
+
                       ),
 
                       Row(
@@ -113,7 +195,7 @@ class _MediatekaState extends State<Mediateka> {
                       index: index,
                       context: context,
                       iconColor: iconColor!,
-                      textColor: textColor!,
+                      textColor: textColor,
                       isUserMakingPlaylist: isUserMakingPlaylist,
                     );
                   }, separatorBuilder: (BuildContext context, int index) {
@@ -175,7 +257,7 @@ class _MediatekaState extends State<Mediateka> {
                             return MiniPlayer(
                               backgroundColor: backgroundColor!,
                               iconColor: iconColor!,
-                              textColor: textColor!,
+                              textColor: textColor,
                               context: context,
                             );
                           },

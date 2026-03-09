@@ -30,6 +30,7 @@ class PlayerProvider extends ChangeNotifier {
   List<AudioSource> filteredSources = []; // Отфильтрованные по названию песни
   bool isSearchMode = false; // Показывает использовал ли пользователь поиск
   Map<int, int> indexesOfSearchedAudios = {}; // Индекс найденного поиском трека в его плейлисте
+  int sleepId = 0; // Нужен для того, чтобы сработала только последняя функция ухода в сон, также позволяет отменить уход в сон
 
 
   PlayerProvider() { // Срабатывает на старте
@@ -303,6 +304,35 @@ class PlayerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Устанавливает режим циклического произведения для одного или всех треков
+  void setLoopMode (LoopMode mode) {
+    player.setLoopMode(mode);
+    notifyListeners();
+  }
+
+  // Установить таймер сна
+  Future<void> setSleepTimer(int minutes) async {
+    sleepId += 1;
+    final mySleepId = sleepId;
+    await Future.delayed(Duration(minutes: minutes));
+    if (mySleepId == sleepId) {
+      double currentVolume = player.volume;
+      double fadePerSecond = currentVolume / 120;
+      double volume = currentVolume;
+      for (int second = 0; second < 120; second++) {
+        volume = volume - fadePerSecond;
+        await Future.delayed(Duration(seconds: 1));
+        await player.setVolume(volume);
+      }
+      player.pause();
+    }
+  }
+
+  // Отменить таймер сна
+  Future<void> denySleepTimer() async {
+    sleepId += 1;
+  }
+
   // Выводит найденные по названию треки
   Future<void> showOnlySearched(String name) async {
     isSearchMode = true;
@@ -360,6 +390,32 @@ class PlayerProvider extends ChangeNotifier {
         scheme.key : Color(scheme.value)
     };
     notifyListeners();
+  }
+
+  void setTheme (String theme) {
+    if (theme == "light") {
+      colorSchemeHexCodes = {
+        "background": 0xFFFFFFFF,
+        "icon": 0xFF000000,
+        "text": 0xFF000000,
+      };
+    }
+    else if (theme == "dark") {
+      colorSchemeHexCodes = {
+        "background": 0xFF000000,
+        "icon": 0xFFFFFFFF,
+        "text": 0xFFFFFFFF,
+      };
+    }
+    else if (theme == "blueSky") {
+      colorSchemeHexCodes = {
+        "background": 0xFF42AAFF,
+        "icon": 0xFFFFFFFF,
+        "text": 0xFFFFFFFF,
+      };
+    }
+    addItemToBox(colorSchemeHexCodes, "colorScheme");
+    updateColors();
   }
 
   // Функции связанные с хранением данных между перезаходами

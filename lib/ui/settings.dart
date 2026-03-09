@@ -50,6 +50,64 @@ class _SettingsState extends State<Settings> {
                 ),
 
                 Text("НАСТРОЙКИ ВНЕШНЕГО ВИДА", style: TextStyle(color: Colors.white, fontSize: screenHeight * 0.0175),),
+                SettingSector(
+                    children: [
+                      SizedBox(
+                        height: screenHeight * 0.075,
+                        child: SettingsEntry(
+                            text: Text("Выбрать тему для приложения", style: TextStyle(color: Colors.white, fontSize: screenHeight * 0.0175),),
+                            onTap: () {
+                              showDialog(
+                                  context: context,
+                                  builder: (context) {
+                                    return AlertDialog(
+                                      title: Text("Выберете тему приложения"),
+                                      actions: [
+
+                                        Align(
+                                          alignment: AlignmentGeometry.centerStart,
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              TextButton(
+                                                  onPressed: (){
+                                                    provider.setTheme("dark");
+                                                    Navigator.pop(context);
+                                                  },
+                                                  child: Text("Тёмная", style: TextStyle(color: Colors.black, fontSize: screenHeight * 0.02),)
+                                              ),
+
+                                              TextButton(
+                                                  onPressed: () {
+                                                    provider.setTheme("light");
+                                                    Navigator.pop(context);
+                                                  },
+                                                  child: Text("Светлая", style: TextStyle(color: Colors.black, fontSize: screenHeight * 0.02),)
+                                              ),
+
+                                              TextButton(
+                                                  onPressed: () {
+                                                    provider.setTheme("blueSky");
+                                                    Navigator.pop(context);
+                                                  },
+                                                  child: Text("Небесная", style: TextStyle(color: Colors.black, fontSize: screenHeight * 0.02),)
+                                              )
+
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  }
+                              );
+                            },
+                            icon: Icon(Icons.arrow_forward_ios, color: Colors.white, size: screenHeight * 0.025,),
+                        ),
+                      )
+                    ]
+                ),
+
+                Text("РАСШИРЕННЫЕ НАСТРОЙКИ ВНЕШНЕГО ВИДА", style: TextStyle(color: Colors.white, fontSize: screenHeight * 0.0175),),
 
                 SettingSector(
                     children: [

@@ -150,12 +150,7 @@ class _ColorPickerAlertDialogState extends State<ColorPickerAlertDialog> {
                 await provider.changeColorScheme(normalizedHexCode, widget.object);
               }
               else {
-                ScaffoldMessenger.of(widget.context).showSnackBar(
-                    const SnackBar(
-                      content: Center(child: Text('Неправильный hex код')),
-                      behavior: SnackBarBehavior.floating,
-                  ),
-                );
+                showNotification(context, "Неправильный hex код");
               }
               colorController.clear();
               Navigator.pop(context);
@@ -256,6 +251,7 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
                                         provider.currentPlaylist != "main" ? TextButton(
                                             onPressed: () async {
                                               await provider.removeFromExistingPlaylist(globalIndex);
+                                              Navigator.pop(context);
                                             },
                                             child: Text("Удалить аудио из плейлиста", style: TextStyle(color: Colors.black),)
                                         ) : SizedBox.shrink(),
@@ -368,8 +364,19 @@ class _MiniPlayerState extends State<MiniPlayer> {
           SizedBox(
             height: screenHeight * 0.1,
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.start,
               children: [
+
+                Padding(
+                  padding: EdgeInsets.only(left: screenWidth * 0.235, right: screenWidth * 0.05),
+                  child: IconButton(
+                      onPressed: () {
+                        provider.player.loopMode == LoopMode.off ? provider.setLoopMode(LoopMode.one) : provider.setLoopMode(LoopMode.off);
+                        showNotification(widget.context, provider.player.loopMode == LoopMode.one ? 'Включён режим повтора' : "Режим повтора выключен");
+                      },
+                      icon: Icon(Icons.loop, color: widget.iconColor, size: screenHeight * 0.04)
+                  ),
+                ),
 
                 IconButton(
                     onPressed: () {
@@ -693,3 +700,96 @@ class _PlaylistTileState extends State<PlaylistTile> {
   }
 }
 
+// Вызывает уведомление с каким-то определённым сообщением
+Future<void> showNotification(BuildContext context, String message) async {
+  OverlayState? overlayState = Overlay.of(context);
+  OverlayEntry overlayEntry = OverlayEntry(
+      builder: (context) {
+        final screenHeight = MediaQuery.of(context).size.height;
+        return Positioned(
+          top: screenHeight * 0.025,
+          left: 0,
+          right: 0,
+          child: TweenAnimationBuilder<double>(
+            duration: Duration(milliseconds: 300),
+            tween: Tween(begin: -100.0, end: 0.0),
+            builder: (context, value, child) {
+              return Transform.translate(
+                offset: Offset(0, value),
+                child: child,
+              );
+            },
+            child: Center(
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey,
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: Padding(
+                      padding: EdgeInsetsGeometry.all(screenHeight * 0.02),
+                      child: Text(message, style: TextStyle(color: Colors.black, fontSize: screenHeight * 0.02),),
+                    )
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+  );
+  overlayState.insert(overlayEntry);
+  await Future.delayed(Duration(seconds: 2));
+  overlayEntry.remove();
+}
+
+// Слайдер громкости
+class VolumeSlider extends StatefulWidget {
+  final BuildContext context;
+  final Color iconColor;
+  final Color textColor;
+  const VolumeSlider({
+    super.key,
+    required this.context,
+    required this.iconColor,
+    required this.textColor,
+  });
+
+  @override
+  State<VolumeSlider> createState() => _VolumeSliderState();
+}
+
+class _VolumeSliderState extends State<VolumeSlider> {
+  @override
+  Widget build(BuildContext context) {
+    final provider = widget.context.watch<PlayerProvider>();
+    return StreamBuilder( // Обновляет слайдер каждый раз как меняется громкость
+        stream: provider.player.volumeStream,
+        builder: (context, asyncSnapshot) {
+          return Row(
+            children: [
+              Icon(Icons.volume_down, color: widget.iconColor,),
+              
+              Expanded(
+                child: Slider(
+                  value: provider.player.volume, // Текущее положение точки зависит от положения пальца при перемещении и от текущей громкости трека
+                  min: 0.0,
+                  max: 1.0,
+                  onChanged: (value) {
+                    setState(() {
+                      provider.player.setVolume(value);
+                    });
+                  },
+                  activeColor: widget.iconColor,
+                  thumbColor: widget.iconColor,
+                ),
+              ),
+              
+              Text("${(provider.player.volume * 100)~/1}", style: TextStyle(color: widget.textColor),)
+              
+            ],
+          );
+        }
+    );
+  }
+}
