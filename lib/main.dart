@@ -1,5 +1,6 @@
 import 'package:chuni_player_revamped/ui/mediateka.dart';
 import 'package:chuni_player_revamped/ui/playlist.dart';
+import 'package:chuni_player_revamped/ui/search&load.dart';
 import 'package:chuni_player_revamped/ui/settings.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -39,6 +40,7 @@ void main() async {
                 '/settings': (_) => Settings(),
                 '/mediateka': (_) => Mediateka(),
                 '/playlist': (_) => Playlist(),
+                '/search&load': (_) => SearchAndLoad(),
               }
           );
         }

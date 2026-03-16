@@ -22,7 +22,6 @@ class _MediatekaState extends State<Mediateka> {
     super.initState();
     searchController = TextEditingController();
     timeController = TextEditingController();
-
   }
 
   @override
@@ -194,7 +193,7 @@ class _MediatekaState extends State<Mediateka> {
                     return MediatekaListTile(
                       index: index,
                       context: context,
-                      iconColor: iconColor!,
+                      iconColor: iconColor,
                       textColor: textColor,
                       isUserMakingPlaylist: isUserMakingPlaylist,
                     );

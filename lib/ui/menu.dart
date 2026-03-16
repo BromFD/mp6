@@ -23,53 +23,126 @@ class _MenuState extends State<Menu> {
     final textColor = provider.colorScheme["text"];
     return Scaffold(
       backgroundColor: backgroundColor,
-      appBar: AppBar(
-        title: Center(child: Text("ChuniPlayer", style: TextStyle(color: textColor))),
-        backgroundColor: backgroundColor,
-        automaticallyImplyLeading: false,
-      ),
       body: SafeArea(
-          child: ListView(
-            children: [
-              //Тут просто кнопки для перехода между страницами
+          child: Padding(
+            padding: EdgeInsets.all(screenHeight * 0.15),
+            child: ListView(
+              children: [
 
-              SizedBox(
-                height: 0.1 * screenHeight,
-                child: MenuEntry(
-                  onTap: () {
-                    Navigator.pushNamed(context, "/mediateka");
-                  },
-                  text: Text('Медиатека', style: TextStyle(color: textColor, fontSize: screenHeight * 0.025),),
-                  padding: Padding(padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.05)),
-                  child: Icon(Icons.folder, color: iconColor, size: screenHeight * 0.05,),
+                Center(
+                  child: Container(
+                    width: screenWidth * 0.25,
+                    height: screenHeight * 0.075,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(15),
+                      color: iconColor,
+                    ),
+                    child: Center(child: Text("mp6", style: TextStyle(fontSize: screenHeight * 0.035, color: backgroundColor, fontWeight: FontWeight(1000)),),),
+                  ),
                 ),
-              ),
 
-              SizedBox(
-                height: 0.1 * screenHeight,
-                child: MenuEntry(
-                  onTap: () {
-                    Navigator.pushNamed(context, "/playlist");
-                  },
-                  text: Text('Плейлисты', style: TextStyle(color: textColor, fontSize: screenHeight * 0.025),),
-                  padding: Padding(padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.05)),
-                  child: Icon(Icons.playlist_play_sharp, color: iconColor, size: screenHeight * 0.05,),
+                Padding(padding: EdgeInsets.symmetric(vertical: screenHeight * 0.025)),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  spacing: screenWidth * 0.1,
+                  children: [
+
+                    MenuEntry(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(30),
+                        color: textColor,
+                      ),
+                        onTap: (){
+                          provider.loaded ? Navigator.pushNamed(context, "/mediateka") : null;
+                        },
+                        child: Padding(
+                          padding: EdgeInsets.all(screenHeight * 0.025),
+                          child: Icon(Icons.folder_outlined, color: backgroundColor, size: screenHeight * 0.075,),
+                        ),
+                    ),
+
+                    MenuEntry(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(30),
+                        color: textColor,
+                      ),
+                      onTap: (){
+                        provider.loaded ? Navigator.pushNamed(context, "/playlist") : null;
+                      },
+                      child: Padding(
+                        padding: EdgeInsets.all(screenHeight * 0.025),
+                        child: Icon(Icons.playlist_play_outlined, color: backgroundColor, size: screenHeight * 0.075,),
+                      ),
+                    ),
+
+                  ],
                 ),
-              ),
 
-              SizedBox(
-                height: 0.1 * screenHeight,
-                child: MenuEntry(
-                  onTap: () {
-                    Navigator.pushNamed(context, '/settings');
-                  },
-                  text: Text('Настройки', style: TextStyle(color: textColor, fontSize: screenHeight * 0.025),),
-                  padding: Padding(padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.05)),
-                  child: Icon(Icons.settings, color: iconColor, size: screenHeight * 0.05,),
+                Padding(padding: EdgeInsets.symmetric(vertical: screenHeight * 0.025)),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  spacing: screenWidth * 0.1,
+                  children: [
+
+                    MenuEntry(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(30),
+                        color: textColor,
+                      ),
+                      onTap: (){
+                        provider.loaded ? Navigator.pushNamed(context, "/search&load") : null;
+                      },
+                      child: Padding(
+                        padding: EdgeInsets.all(screenHeight * 0.025),
+                        child: Icon(Icons.search_outlined, color: backgroundColor, size: screenHeight * 0.075,),
+                      ),
+                    ),
+
+                    MenuEntry(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(30),
+                        color: textColor,
+                      ),
+                      onTap: (){
+
+                      },
+                      child: Padding(
+                        padding: EdgeInsets.all(screenHeight * 0.025),
+                        child: Icon(Icons.tune_outlined, color: backgroundColor, size: screenHeight * 0.075,),
+                      ),
+                    ),
+
+                  ],
                 ),
-              )
 
-            ],
+                Padding(padding: EdgeInsets.symmetric(vertical: screenHeight * 0.025)),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  spacing: screenWidth * 0.1,
+                  children: [
+
+                    MenuEntry(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(30),
+                        color: textColor,
+                      ),
+                      onTap: (){
+                        provider.loaded ? Navigator.pushNamed(context, "/settings") : null;
+                      },
+                      child: Padding(
+                        padding: EdgeInsets.all(screenHeight * 0.025),
+                        child: Icon(Icons.settings_outlined, color: backgroundColor, size: screenHeight * 0.075,),
+                      ),
+                    ),
+
+                  ],
+                ),
+
+              ],
+            ),
           )
         ),
     );

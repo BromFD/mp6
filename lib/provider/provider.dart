@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Element;
 import 'package:metadata_god/metadata_god.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:file_picker/file_picker.dart';
@@ -7,6 +7,11 @@ import 'dart:io';
 import 'package:just_audio/just_audio.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:just_audio_background/just_audio_background.dart';
+import 'package:dio/dio.dart';
+import 'package:html/dom.dart';
+import 'package:html/dom_parsing.dart';
+import 'package:html/parser.dart';
+import 'package:punycoder/punycoder.dart';
 
 class PlayerProvider extends ChangeNotifier {
   Directory audioFilesDirectory = Directory("/storage/emulated/0/Music"); // Папка с музыкой
@@ -15,7 +20,7 @@ class PlayerProvider extends ChangeNotifier {
   List<AudioSource> audioSources = []; // Список текущих треков с которыми будет работать аудио плеер (UI тоже будет полагатся на него)
   Set<int> audioSourcesIndexes = {}; // Индексы audioSources которые будут добавлены в плейлист
   Map<String, int> colorSchemeHexCodes = { // Hex коды цветовой схемы, нужны т.к Hive не хранит объекты типа Color
-    "background": 0xFF000000,
+    "background": 0xFF1E1E1E,
     "icon": 0xFF9C27B0,
     "text": 0xFFFFFFFF,
   };
@@ -31,6 +36,18 @@ class PlayerProvider extends ChangeNotifier {
   bool isSearchMode = false; // Показывает использовал ли пользователь поиск
   Map<int, int> indexesOfSearchedAudios = {}; // Индекс найденного поиском трека в его плейлисте
   int sleepId = 0; // Нужен для того, чтобы сработала только последняя функция ухода в сон, также позволяет отменить уход в сон
+  List<Map<String, String>> foundAudioFiles = []; // Отображает найденные в поиске по интернету(Ютубу) треки
+  final dio = Dio( // Делает запросы
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        },
+      )
+  );
+  bool loaded = false; // Чекает прогружены ли треки на старте
 
 
   PlayerProvider() { // Срабатывает на старте
@@ -47,11 +64,12 @@ class PlayerProvider extends ChangeNotifier {
     await scanAudioFiles();
     await loadAudioFiles(); // Загружает аудиофайлы 1 раз при старте
     player.currentIndexStream.listen((index) { //Автоматическое обновление информации о текущем аудиофайле при смене индекса трека
-      if (index != null) {
+      if (index != null && audioSources.isNotEmpty) {
         currentAudioFile = audioFiles[int.parse((audioSources[index] as IndexedAudioSource).tag.id)];
         notifyListeners();
       }
     });
+    loaded = true;
   }
 
   //Запрос разрешений на чтение и запись в хранилище телефона (Для библиотек)
@@ -82,9 +100,9 @@ class PlayerProvider extends ChangeNotifier {
         Directory currentDir = directoriesToScan.removeAt(0);
 
         try {
-          List<FileSystemEntity> entities = currentDir.listSync();
+          Stream<FileSystemEntity> entities = currentDir.list(recursive: false, followLinks: true);
 
-          for (var entity in entities) {
+          await for (var entity in entities) {
             if (entity is Directory) {
               String folderName = p.basename(entity.path);
               if (!folderName.startsWith('.') && folderName != 'Android') {
@@ -102,7 +120,6 @@ class PlayerProvider extends ChangeNotifier {
         }
       }
       audioFilesPaths = foundSongs;
-      notifyListeners();
   }
 
   //Выбор директории c аудио файлами при помощи библиотеки FilePicker
@@ -141,6 +158,7 @@ class PlayerProvider extends ChangeNotifier {
         null;
       }
     }
+    print("Длина аудио файлов: ${audioFiles.length}");
     createMainList();
   }
 
@@ -155,9 +173,9 @@ class PlayerProvider extends ChangeNotifier {
           title: audioFiles[index]["name"],
         ),
     )];
+    notifyListeners();
     await player.setAudioSources(audioSources, initialIndex: 0, initialPosition: Duration.zero,
     shuffleOrder: DefaultShuffleOrder());
-    notifyListeners();
   }
 
   // Запускает выбранный трек
@@ -396,13 +414,13 @@ class PlayerProvider extends ChangeNotifier {
     if (theme == "light") {
       colorSchemeHexCodes = {
         "background": 0xFFFFFFFF,
-        "icon": 0xFF000000,
-        "text": 0xFF000000,
+        "icon": 0xFF1E1E1E,
+        "text": 0xFF1E1E1E,
       };
     }
     else if (theme == "dark") {
       colorSchemeHexCodes = {
-        "background": 0xFF000000,
+        "background": 0xFF1E1E1E,
         "icon": 0xFFFFFFFF,
         "text": 0xFFFFFFFF,
       };
@@ -416,6 +434,101 @@ class PlayerProvider extends ChangeNotifier {
     }
     addItemToBox(colorSchemeHexCodes, "colorScheme");
     updateColors();
+  }
+
+  // Функции связанные с поиском и скачиванием аудио с интернета
+
+  // Ищет аудио по названию
+  Future<String> searchAudioFiles(String title) async {
+    String correctTitle = generateCorrectTitle(title);
+    String searchQueryLink = Uri.parse("https://$correctTitle.skysound7.com/").toString();
+    try {
+      var response = await dio.get(searchQueryLink);
+      if (response.statusCode == 200) {
+        Document searchQueryPage = parse(response.data);
+        List<Element> foundAudio = searchQueryPage.querySelectorAll('[class*="adv_list_track"]');
+        foundAudioFiles = [
+          for (var audioData in foundAudio)
+            {
+              "name": audioData.querySelector('[class*="adv_name"]')?.querySelector("em")?.text ?? "",
+              "artist": audioData.querySelector('[class*="adv_artist"]')?.text ?? "",
+              "duration": audioData.querySelector('[class*="adv_duration"]')?.text ?? "",
+              "trackPageUrl": audioData.querySelector('[class*="playlist-down"]')?.attributes['href'] ?? "",
+            }
+        ];
+      }
+      notifyListeners();
+      return "ok";
+    } on DioException catch (e) {
+      return "Ошибка парсинга (Попробуйте отключить ВПН)";
+    }
+  }
+
+  // Скачивает аудио
+  Future<String> downloadAudio(String url, String name) async {
+
+    String correctName = name.replaceAll(RegExp(r'[^\p{L}0-9 ().-]', unicode: true), "");
+    try {
+      var response = await dio.get(url);
+      if (response.statusCode == 200) {
+        Document trackPage = parse(response.data);
+        String? downloadLink = trackPage.getElementById("SongView")?.attributes["href"].toString();
+        if (downloadLink != null) {
+          try {
+            await dio.download(downloadLink, "/storage/emulated/0/Music/$correctName.mp3");
+          } on Exception catch (e) {
+            return "Ошибка скачивания";
+          }
+        }
+      }
+      await scanAudioFiles();
+      await loadAudioFiles();
+      pause();
+      return "Файл скачен успешно";
+
+    } on DioException catch (e) {
+      return "Ошибка парсинга (Попробуйте отключить ВПН)";
+    }
+  }
+
+  // Запускает предпросмотр найденного трека
+  Future<String> playFound(String url, String name, int id) async {
+    String correctName = name.replaceAll(RegExp(r'[^\p{L}0-9 ().-]', unicode: true), "");
+    try {
+      var response = await dio.get(url);
+      if (response.statusCode == 200) {
+        Document trackPage = parse(response.data);
+        String? downloadLink = trackPage.getElementById("SongView")?.attributes["href"].toString();
+        if (downloadLink != null) {
+          player.stop();
+          await player.setUrl(downloadLink, tag:
+          MediaItem(
+            id: "f$id",
+            title: correctName,
+          ),);
+          play();
+        }
+      }
+      return "ok";
+    } on DioException catch (e) {
+      return "Ошибка парсинга (Попробуйте отключить ВПН)";
+    }
+  }
+
+  // Генерирует правильное название
+  String generateCorrectTitle(String title) {
+    String cleanedTitle = title.toLowerCase()
+        .replaceAll(RegExp(r'[^\p{L}0-9]', unicode: true), "-")
+        .replaceAll(RegExp(r'-+'), '-')
+        .replaceAll(RegExp(r'^-+|-+$'), '');
+    String encodedTitle;
+    if (RegExp(r'[^a-zA-Z0-9-]').hasMatch(cleanedTitle)) {
+      encodedTitle = "xn--${punycode.encode(cleanedTitle)}";
+    } else {
+      encodedTitle = cleanedTitle;
+    }
+
+    return encodedTitle;
   }
 
   // Функции связанные с хранением данных между перезаходами

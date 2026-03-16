@@ -7,18 +7,14 @@ import 'package:marquee/marquee.dart';
 
 // Этот виджет отвечает за пункты меню на стартовом экране
 class MenuEntry extends StatelessWidget {
-  final Text? text;
   final GestureTapCallback? onTap;
   final Widget? child;
-  final Padding? padding;
   final BoxDecoration? decoration;
 
   const MenuEntry({
     super.key,
-    required this.text,
     required this.onTap,
     required this.child,
-    this.padding,
     this.decoration,
   });
 
@@ -28,14 +24,7 @@ class MenuEntry extends StatelessWidget {
       decoration: decoration ?? BoxDecoration(),
       child: InkWell(
             onTap: onTap,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                child ?? SizedBox.shrink(),
-                padding ?? SizedBox.shrink(),
-                text ?? SizedBox.shrink(),
-              ],
-            ),
+            child: child,
           ),
     );
   }
@@ -364,18 +353,15 @@ class _MiniPlayerState extends State<MiniPlayer> {
           SizedBox(
             height: screenHeight * 0.1,
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
 
-                Padding(
-                  padding: EdgeInsets.only(left: screenWidth * 0.235, right: screenWidth * 0.05),
-                  child: IconButton(
-                      onPressed: () {
-                        provider.player.loopMode == LoopMode.off ? provider.setLoopMode(LoopMode.one) : provider.setLoopMode(LoopMode.off);
-                        showNotification(widget.context, provider.player.loopMode == LoopMode.one ? 'Включён режим повтора' : "Режим повтора выключен");
-                      },
-                      icon: Icon(Icons.loop, color: widget.iconColor, size: screenHeight * 0.04)
-                  ),
+                IconButton(
+                    onPressed: () {
+                      provider.player.loopMode == LoopMode.off ? provider.setLoopMode(LoopMode.one) : provider.setLoopMode(LoopMode.off);
+                      showNotification(widget.context, provider.player.loopMode == LoopMode.one ? 'Включён режим повтора' : "Режим повтора выключен");
+                    },
+                    icon: Icon(Icons.loop, color: widget.iconColor, size: screenHeight * 0.04)
                 ),
 
                 IconButton(
@@ -384,7 +370,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
                     },
                     icon: Icon(Icons.skip_previous, color: widget.iconColor, size: screenHeight * 0.04)
                 ),
-
+                
                 IconButton(
                     onPressed: () {
                       if (isPlaying) {
@@ -395,18 +381,20 @@ class _MiniPlayerState extends State<MiniPlayer> {
                     },
                     icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow, color: widget.iconColor, size: screenHeight * 0.04)
                 ),
-
+                
                 IconButton(
                     onPressed: () {
                       provider.playNext();
                     },
                     icon: Icon(Icons.skip_next, color: widget.iconColor, size: screenHeight * 0.04)
                 ),
+                
+                Padding(padding: EdgeInsetsGeometry.all(screenHeight * 0.02))
 
               ],
             ),
           ),
-
+          Padding(padding: EdgeInsets.only(bottom: screenWidth * 0.2))
         ],
       ),
     );
@@ -790,6 +778,69 @@ class _VolumeSliderState extends State<VolumeSlider> {
             ],
           );
         }
+    );
+  }
+}
+
+class YTSearchTile extends StatelessWidget {
+  final BuildContext context;
+  final int index;
+  final Color textColor;
+  final Color iconColor;
+  const YTSearchTile({
+    super.key,
+    required this.context,
+    required this.index,
+    required this.textColor,
+    required this.iconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<PlayerProvider>();
+    return LayoutBuilder(
+      builder: (context, constraints){
+        double width = constraints.maxWidth;
+        double height = constraints.maxHeight;
+        return ListTile(
+          title: Text(provider.foundAudioFiles[index]["name"] ?? "Not found", style: TextStyle(color: textColor),),
+          subtitle: Text("Автор: ${provider.foundAudioFiles[index]["artist"] ?? "Not Found"}", style: TextStyle(color: textColor),),
+          leading: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+
+              IconButton(
+                  onPressed: () async {
+                    String response = await provider.downloadAudio(provider.foundAudioFiles[index]["trackPageUrl"]!, provider.foundAudioFiles[index]["name"]!);
+                    showNotification(context, response);
+                  },
+                  icon: Icon(Icons.download, color: iconColor,),
+              ),
+
+              IconButton(
+                onPressed: () async {
+                  if (provider.player.sequenceState.currentSource?.tag.id != "f$index") {
+                    String response = await provider.playFound(provider.foundAudioFiles[index]["trackPageUrl"]!, provider.foundAudioFiles[index]["name"]!, index);
+                    response != "ok" ? showNotification(context, response) : null;
+                  } else {
+                    if (provider.player.playing) {
+                      provider.pause();
+                    } else {
+                      provider.play();
+                    }
+                  }
+                },
+                icon: Icon(provider.player.playing && provider.player.sequenceState.currentSource?.tag.id == "f$index" ? Icons.pause : Icons.play_arrow, color: iconColor,),
+              ),
+
+            ],
+          ),
+          trailing: Text(
+              "${provider.foundAudioFiles[index]["duration"]}",
+              style: TextStyle(color: textColor)
+          ),
+        );
+      },
     );
   }
 }

@@ -61,7 +61,7 @@ class _SettingsState extends State<Settings> {
                                   context: context,
                                   builder: (context) {
                                     return AlertDialog(
-                                      title: Text("Выберете тему приложения"),
+                                      title: Text("Выберите тему приложения"),
                                       actions: [
 
                                         Align(
