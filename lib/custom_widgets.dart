@@ -4,28 +4,54 @@ import 'package:just_audio_background/just_audio_background.dart';
 import 'package:provider/provider.dart';
 import 'package:chuni_player_revamped/provider/provider.dart';
 import 'package:marquee/marquee.dart';
+import 'package:chuni_player_revamped/main.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 // Этот виджет отвечает за пункты меню на стартовом экране
-class MenuEntry extends StatelessWidget {
-  final GestureTapCallback? onTap;
+class MenuEntry extends StatefulWidget {
+  final VoidCallback? action;
   final Widget? child;
   final BoxDecoration? decoration;
 
   const MenuEntry({
     super.key,
-    required this.onTap,
     required this.child,
+    required this.action,
     this.decoration,
   });
 
   @override
+  State<MenuEntry> createState() => _MenuEntryState();
+}
+
+class _MenuEntryState extends State<MenuEntry> {
+  double scale = 1.0;
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: decoration ?? BoxDecoration(),
-      child: InkWell(
-            onTap: onTap,
-            child: child,
-          ),
+    return GestureDetector(
+      onTapDown: (_) => setState(() => scale = 0.8),
+      onTapUp: (_) async {
+        await Future.delayed(Duration(milliseconds: 50));
+        setState(()  {
+          scale = 1.0;
+        });
+      },
+      onTapCancel: () => setState(() => scale = 1.0),
+      onTap: () async {
+        await Future.delayed(Duration(milliseconds: 100));
+        widget.action == null ? null : widget.action!();
+      },
+      child: AnimatedScale(
+        scale: scale,
+        duration: Duration(milliseconds: 50),
+        curve: Curves.easeIn,
+        child: Container(
+            decoration: widget.decoration ?? BoxDecoration(),
+            child: widget.child,
+        ),
+      ),
     );
   }
 }
@@ -139,7 +165,7 @@ class _ColorPickerAlertDialogState extends State<ColorPickerAlertDialog> {
                 await provider.changeColorScheme(normalizedHexCode, widget.object);
               }
               else {
-                showNotification(context, "Неправильный hex код");
+                showNotification("Неправильный hex код");
               }
               colorController.clear();
               Navigator.pop(context);
@@ -269,7 +295,8 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
                 await Future.delayed(Duration(milliseconds: 500));
                 provider.isSearchMode = false;
                 provider.audioSources = [for (var sourceIndex in provider.playlists[provider.currentPlaylist]!)
-                  AudioSource.uri(Uri.parse(provider.audioFiles[sourceIndex]["url"]),
+                  AudioSource.uri(
+                    provider.audioFiles[sourceIndex]["uri"],
                     tag: MediaItem(
                       id: '$sourceIndex',
                       title: provider.audioFiles[sourceIndex]["name"],
@@ -359,7 +386,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
                 IconButton(
                     onPressed: () {
                       provider.player.loopMode == LoopMode.off ? provider.setLoopMode(LoopMode.one) : provider.setLoopMode(LoopMode.off);
-                      showNotification(widget.context, provider.player.loopMode == LoopMode.one ? 'Включён режим повтора' : "Режим повтора выключен");
+                      showNotification(provider.player.loopMode == LoopMode.one ? 'Включён режим повтора' : "Режим повтора выключен");
                     },
                     icon: Icon(Icons.loop, color: widget.iconColor, size: screenHeight * 0.04)
                 ),
@@ -689,8 +716,11 @@ class _PlaylistTileState extends State<PlaylistTile> {
 }
 
 // Вызывает уведомление с каким-то определённым сообщением
-Future<void> showNotification(BuildContext context, String message) async {
-  OverlayState? overlayState = Overlay.of(context);
+Future<void> showNotification(String message) async {
+  final currentState = navigatorKey.currentState;
+  print(currentState);
+  if (currentState == null) return;
+  OverlayState? overlayState = currentState.overlay;
   OverlayEntry overlayEntry = OverlayEntry(
       builder: (context) {
         final screenHeight = MediaQuery.of(context).size.height;
@@ -726,7 +756,7 @@ Future<void> showNotification(BuildContext context, String message) async {
         );
       }
   );
-  overlayState.insert(overlayEntry);
+  overlayState!.insert(overlayEntry);
   await Future.delayed(Duration(seconds: 2));
   overlayEntry.remove();
 }
@@ -811,8 +841,7 @@ class YTSearchTile extends StatelessWidget {
 
               IconButton(
                   onPressed: () async {
-                    String response = await provider.downloadAudio(provider.foundAudioFiles[index]["trackPageUrl"]!, provider.foundAudioFiles[index]["name"]!);
-                    showNotification(context, response);
+                    await provider.downloadAudio(provider.foundAudioFiles[index]["trackPageUrl"]!, provider.foundAudioFiles[index]["name"]!);
                   },
                   icon: Icon(Icons.download, color: iconColor,),
               ),
@@ -820,8 +849,7 @@ class YTSearchTile extends StatelessWidget {
               IconButton(
                 onPressed: () async {
                   if (provider.player.sequenceState.currentSource?.tag.id != "f$index") {
-                    String response = await provider.playFound(provider.foundAudioFiles[index]["trackPageUrl"]!, provider.foundAudioFiles[index]["name"]!, index);
-                    response != "ok" ? showNotification(context, response) : null;
+                    await provider.playFound(provider.foundAudioFiles[index]["trackPageUrl"]!, provider.foundAudioFiles[index]["name"]!, index);
                   } else {
                     if (provider.player.playing) {
                       provider.pause();

@@ -1,3 +1,5 @@
+import 'package:chuni_player_revamped/custom_widgets.dart';
+import 'package:chuni_player_revamped/log/logger.dart';
 import 'package:flutter/material.dart' hide Element;
 import 'package:metadata_god/metadata_god.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -12,10 +14,17 @@ import 'package:html/dom.dart';
 import 'package:html/dom_parsing.dart';
 import 'package:html/parser.dart';
 import 'package:punycoder/punycoder.dart';
+import 'package:photo_manager/photo_manager.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:media_store_plus/media_store_plus.dart' hide Document;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:cookie_jar/cookie_jar.dart';
+import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 
 class PlayerProvider extends ChangeNotifier {
   Directory audioFilesDirectory = Directory("/storage/emulated/0/Music"); // Папка с музыкой
-  List<String> audioFilesPaths = []; // Пути к файлам внутри папки с музыкой
+  List<Uri> audioFilesPaths = []; // Пути к файлам внутри папки с музыкой
   List<Map<String, dynamic>> audioFiles = []; // Список аудиофайлов с метаданными
   List<AudioSource> audioSources = []; // Список текущих треков с которыми будет работать аудио плеер (UI тоже будет полагатся на него)
   Set<int> audioSourcesIndexes = {}; // Индексы audioSources которые будут добавлены в плейлист
@@ -41,14 +50,20 @@ class PlayerProvider extends ChangeNotifier {
       BaseOptions(
         connectTimeout: const Duration(seconds: 10),
         receiveTimeout: const Duration(seconds: 10),
+        followRedirects: true,
+        // validateStatus: (status) => status != null && status >= 200 && status < 400,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+          'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Referer': 'https://google.com/',
         },
       )
   );
   bool loaded = false; // Чекает прогружены ли треки на старте
-
+  late int sdkVersion; // Текущая версия SDK
+  final mediaStorePlugin = MediaStore(); // Объект класса медиастор, тащит из файлов URI
+  List<AssetEntity> mediaStoreAudio = []; // Хранит объекты найденных через медиастор песен
 
   PlayerProvider() { // Срабатывает на старте
     onLaunch();
@@ -58,10 +73,12 @@ class PlayerProvider extends ChangeNotifier {
 
   // Штуки которые мы делаем 1 раз при загрузке приложения
   Future<void> onLaunch () async {
-    await askPermissions();
+    MediaStore.appFolder = "ChuniPlayer"; // Ставит папку для media_store_plus
+    await checkSdk(); // Смотрит и ставит SDK версию
+    await askPermissions(); // Разрешения
     await loadItemsFromBoxes(); // Загружает элементы из коробок
+    sdkVersion >= 31 ? await scanAudioFiles() : await scanAudioFilesObsolete();
     colorScheme.isEmpty ? updateColors() : null;
-    await scanAudioFiles();
     await loadAudioFiles(); // Загружает аудиофайлы 1 раз при старте
     player.currentIndexStream.listen((index) { //Автоматическое обновление информации о текущем аудиофайле при смене индекса трека
       if (index != null && audioSources.isNotEmpty) {
@@ -69,30 +86,74 @@ class PlayerProvider extends ChangeNotifier {
         notifyListeners();
       }
     });
+    await prepareCookieManager();
     loaded = true;
+  }
+
+  // Проверка SDK версии
+  Future<void> checkSdk() async {
+    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+    AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+    sdkVersion = androidInfo.version.sdkInt;
   }
 
   //Запрос разрешений на чтение и запись в хранилище телефона (Для библиотек)
   Future<void> askPermissions() async {
     if (Platform.isAndroid) {
-      if (await Permission.audio.isDenied) {
-        await Permission.audio.request();
-      }
-
-      if (await Permission.storage.isDenied) {
-        await Permission.storage.request();
-      }
-
-      if (await Permission.manageExternalStorage.isDenied) {
-        await Permission.manageExternalStorage.request();
+      if (sdkVersion >= 33) {
+        if (await Permission.audio.isDenied) {
+          await Permission.audio.request();
+        }
+      } else {
+        if (await Permission.storage.isDenied) {
+          await Permission.storage.request();
+        }
       }
     }
   }
 
   // Сканирование аудио файлов с помощью PhotoManager
   Future<void> scanAudioFiles() async {
+
+  await MediaStore.ensureInitialized();
+  final PermissionState ps = await PhotoManager.requestPermissionExtend(
+    requestOption: const PermissionRequestOption(
+      androidPermission: AndroidPermission(
+          type: RequestType.audio,
+          mediaLocation: false,
+      )
+    )
+  );
+  if (!ps.isAuth) {
+    print('Нет разрешения на доступ к медиафайлам');
+    return;
+  }
+
+  List<AssetEntity> assets = [];
+  final List<AssetPathEntity> audioDirs = await PhotoManager.getAssetPathList(
+    type: RequestType.audio,
+    onlyAll: true,
+  );
+
+  if (audioDirs.isEmpty) return;
+  final allAudio = audioDirs.first;
+  const int pageSize = 50;
+  int page = 0;
+
+  while (true) {
+    final batch = await allAudio.getAssetListPaged(page: page, size: pageSize);
+    if (batch.isEmpty) break;
+    assets.addAll(batch);
+    page++;
+  }
+
+  mediaStoreAudio = assets;
+}
+
+  // Сканирование для старых андройдов
+  Future<void> scanAudioFilesObsolete() async {
       final List<String> supportedFormats = ['.mp3', '.flac', '.m4a', '.wav', '.ogg'];
-      List<String> foundSongs = [];
+      List<Uri> foundSongs = [];
 
       List<Directory> directoriesToScan = [Directory("/storage/emulated/0/")];
 
@@ -111,7 +172,7 @@ class PlayerProvider extends ChangeNotifier {
             } else if (entity is File) {
               String ext = p.extension(entity.path).toLowerCase();
               if (supportedFormats.contains(ext)) {
-                foundSongs.add(entity.path);
+                foundSongs.add(entity.uri);
               }
             }
           }
@@ -122,8 +183,30 @@ class PlayerProvider extends ChangeNotifier {
       audioFilesPaths = foundSongs;
   }
 
+  // Поделится лог файлом
+  Future<void> shareLogFile() async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final logFile = File('${directory.path}/log.txt');
+
+      if (await logFile.exists()) {
+        await SharePlus.instance.share(
+            ShareParams(
+              text: 'Отправить файл логов',
+              files: [XFile(logFile.path)],
+            )
+        );
+      } else {
+        showNotification("Файл логов еще не создан");
+      }
+    } catch (e) {
+      showNotification("Ошибка при отправке логов: $e");
+    }
+  }
+
   //Выбор директории c аудио файлами при помощи библиотеки FilePicker
-  Future<void> pickAudioFilesDirectory() async {
+  //Временно убран (Может и навсегда)
+  /* Future<void> pickAudioFilesDirectory() async {
     audioFilesPaths = []; // Очищаем пути, чтобы перезаписать, те которые были загружены сканером
     String? path = await FilePicker.platform.getDirectoryPath();
     if (path != null) {
@@ -132,33 +215,62 @@ class PlayerProvider extends ChangeNotifier {
       notifyListeners();
       loadAudioFiles();
     }
-  }
+  } */
 
   // Функции для работы с аудио
 
-  //Загрузка аудио файлов из указанной директории
+  //Загрузка аудио файлов
   Future<void> loadAudioFiles() async {
     audioFiles = [];
-    audioFilesPaths.isEmpty ? audioFilesPaths = [for (var file in audioFilesDirectory.listSync()) if(file is File) file.path] : null;
-    int index = 0;
-    for (var path in audioFilesPaths) {
+    if (sdkVersion >= 31) {
       try {
-        Metadata metadata = await MetadataGod.readMetadata(file: path);
-        Map<String, dynamic> audioFile = {
-          "id": index,
-          "url": path,
-          "name": p.basename(path),
-          "picture": metadata.picture,
-          "duration": metadata.durationMs,
-          "size": metadata.fileSize,
-        };
-        audioFiles.add(audioFile);
-        index++;
-      } catch(e) {
+        int index = 0;
+        for (var asset in mediaStoreAudio) {
+          File? tempFile = await asset.file;
+          if (tempFile != null) {
+            final metadata = await MetadataGod.readMetadata(file: tempFile.path);
+            final uri = await mediaStorePlugin.getUriFromFilePath(path: tempFile.path);
+
+            Map<String, dynamic> audioFile = {
+              "id": index,
+              "uri": uri,
+              "name": p.basename(tempFile.path),
+              "picture": metadata.picture,
+              "duration": metadata.durationMs,
+              "size": metadata.fileSize,
+            };
+            audioFiles.add(audioFile);
+            index++;
+          }
+        }
+      }  catch (e) {
         null;
       }
+    } else {
+      /* audioFilesPaths.isEmpty ? audioFilesPaths = [
+        for (var file in audioFilesDirectory.listSync()) if(file is File) file
+            .uri
+      ] : null; */
+      int index = 0;
+      for (var uri in audioFilesPaths) {
+        try {
+          String path = File.fromUri(uri).path;
+          Metadata metadata = await MetadataGod.readMetadata(file: path);
+          Map<String, dynamic> audioFile = {
+            "id": index,
+            "uri": uri,
+            "name": p.basename(path),
+            "picture": metadata.picture,
+            "duration": metadata.durationMs,
+            "size": metadata.fileSize,
+          };
+          audioFiles.add(audioFile);
+          index++;
+        } catch (e) {
+          null;
+        }
+      }
     }
-    print("Длина аудио файлов: ${audioFiles.length}");
     createMainList();
   }
 
@@ -167,7 +279,8 @@ class PlayerProvider extends ChangeNotifier {
     audioSourcesIndexes = {for (var index = 0; index < audioFiles.length; index++) index};
     playlists["main"] = audioSourcesIndexes;
     currentPlaylist = "main";
-    audioSources = [for (var index in audioSourcesIndexes) AudioSource.uri(Uri.parse(audioFiles[index]["url"]),
+    audioSources = [for (var index in audioSourcesIndexes) AudioSource.uri(
+      audioFiles[index]["uri"],
         tag: MediaItem(
           id: '$index',
           title: audioFiles[index]["name"],
@@ -271,7 +384,8 @@ class PlayerProvider extends ChangeNotifier {
   // Устанавливает текущий плейлист
   Future<void> setCurrentPlaylist(String name) async {
     currentPlaylist = name;
-    audioSources = [for (var index in playlists[name]!) AudioSource.uri(Uri.parse(audioFiles[index]["url"]),
+    audioSources = [for (var index in playlists[name]!) AudioSource.uri(
+      audioFiles[index]["uri"],
         tag: MediaItem(
           id: '$index',
           title: audioFiles[index]["name"],
@@ -360,7 +474,8 @@ class PlayerProvider extends ChangeNotifier {
       int index = 0;
       for (var sourceIndex in currentPlaylistIndexes) {
         if ((audioFiles[sourceIndex]["name"].toLowerCase()).contains(name.toLowerCase())){
-          filteredSources.add(AudioSource.uri(Uri.parse(audioFiles[sourceIndex]["url"]),
+          filteredSources.add(AudioSource.uri(
+            audioFiles[sourceIndex]["uri"],
             tag: MediaItem(
               id: '$sourceIndex',
               title: audioFiles[sourceIndex]["name"],
@@ -374,7 +489,8 @@ class PlayerProvider extends ChangeNotifier {
       audioSources = filteredSources;
     } else {
       audioSources = [for (var sourceIndex in playlists[currentPlaylist]!)
-        AudioSource.uri(Uri.parse(audioFiles[sourceIndex]["url"]),
+        AudioSource.uri(
+          audioFiles[sourceIndex]["uri"],
           tag: MediaItem(
             id: '$sourceIndex',
             title: audioFiles[sourceIndex]["name"],
@@ -438,8 +554,18 @@ class PlayerProvider extends ChangeNotifier {
 
   // Функции связанные с поиском и скачиванием аудио с интернета
 
+  // Сохраняет куки между редиректами
+  Future<void> prepareCookieManager() async {
+    final directory = await getApplicationDocumentsDirectory();
+    final cookieJar = PersistCookieJar(
+      ignoreExpires: true,
+      storage: FileStorage(p.join(directory.path, ".cookies")),
+    );
+    dio.interceptors.add(CookieManager(cookieJar));
+  }
+
   // Ищет аудио по названию
-  Future<String> searchAudioFiles(String title) async {
+  Future<void> searchAudioFiles(String title) async {
     String correctTitle = generateCorrectTitle(title);
     String searchQueryLink = Uri.parse("https://$correctTitle.skysound7.com/").toString();
     try {
@@ -456,16 +582,17 @@ class PlayerProvider extends ChangeNotifier {
               "trackPageUrl": audioData.querySelector('[class*="playlist-down"]')?.attributes['href'] ?? "",
             }
         ];
+      } else {
       }
       notifyListeners();
-      return "ok";
     } on DioException catch (e) {
-      return "Ошибка парсинга (Попробуйте отключить ВПН)";
+      appLog.e(e);
+      showNotification(e.toString());
     }
   }
 
   // Скачивает аудио
-  Future<String> downloadAudio(String url, String name) async {
+  Future<void> downloadAudio(String url, String name) async {
 
     String correctName = name.replaceAll(RegExp(r'[^\p{L}0-9 ().-]', unicode: true), "");
     try {
@@ -473,26 +600,42 @@ class PlayerProvider extends ChangeNotifier {
       if (response.statusCode == 200) {
         Document trackPage = parse(response.data);
         String? downloadLink = trackPage.getElementById("SongView")?.attributes["href"].toString();
+        Directory tempDir = await getApplicationDocumentsDirectory();
+        String tempPath = "${tempDir.path}/$correctName.mp3";
         if (downloadLink != null) {
           try {
-            await dio.download(downloadLink, "/storage/emulated/0/Music/$correctName.mp3");
+            await dio.download(downloadLink, tempPath);
+            await mediaStorePlugin.saveFile(
+                tempFilePath: tempPath,
+                dirType: DirType.audio,
+                dirName: DirName.music,
+            );
+
+            File disposed = File(tempPath);
+            if (await disposed.exists()){
+              await disposed.delete();
+            }
+
+            showNotification("Файл скачен успешно");
           } on Exception catch (e) {
-            return "Ошибка скачивания";
+            appLog.e(e);
+            return showNotification(e.toString());
           }
         }
       }
-      await scanAudioFiles();
+      sdkVersion >= 31 ? await scanAudioFiles() : await scanAudioFilesObsolete();
       await loadAudioFiles();
       pause();
-      return "Файл скачен успешно";
+      return showNotification("Файл скачен успешно");
 
     } on DioException catch (e) {
-      return "Ошибка парсинга (Попробуйте отключить ВПН)";
+      appLog.e(e);
+      return showNotification(e.toString());
     }
   }
 
   // Запускает предпросмотр найденного трека
-  Future<String> playFound(String url, String name, int id) async {
+  Future<void> playFound(String url, String name, int id) async {
     String correctName = name.replaceAll(RegExp(r'[^\p{L}0-9 ().-]', unicode: true), "");
     try {
       var response = await dio.get(url);
@@ -509,9 +652,9 @@ class PlayerProvider extends ChangeNotifier {
           play();
         }
       }
-      return "ok";
     } on DioException catch (e) {
-      return "Ошибка парсинга (Попробуйте отключить ВПН)";
+      appLog.e(e);
+      return showNotification(e.toString());
     }
   }
 

@@ -73,10 +73,10 @@ class _MediatekaState extends State<Mediateka> {
                         onPressed: () {
                           if (int.tryParse(timeController.text) != null) {
                             provider.setSleepTimer(int.parse(timeController.text));
-                            showNotification(context, "Таймер сна установлен на ${timeController.text} минут");
+                            showNotification("Таймер сна установлен на ${timeController.text} минут");
                             timeController.clear();
                           } else {
-                            showNotification(context, "Молодец, тестировщик");
+                            showNotification("Молодец, тестировщик");
                             timeController.clear();
                           }
                         },
@@ -85,7 +85,7 @@ class _MediatekaState extends State<Mediateka> {
                     IconButton(
                       onPressed: () {
                         provider.denySleepTimer();
-                        showNotification(context, "Текущий таймер сна отменён");
+                        showNotification("Текущий таймер сна отменён");
                       },
                       icon: Icon(Icons.close, color: iconColor,),
                     ),
@@ -137,14 +137,14 @@ class _MediatekaState extends State<Mediateka> {
                           IconButton(
                               onPressed: (){
                                 provider.switchShuffle(true);
-                                showNotification(context, "Включено рандомное воспроизведение");
+                                showNotification("Включено рандомное воспроизведение");
                               },
                               icon: Icon(Icons.shuffle, color: iconColor,)),
 
                           IconButton(
                               onPressed: (){
                                 provider.switchShuffle(false);
-                                showNotification(context, "Рандомное воспроизведение выключено");
+                                showNotification("Рандомное воспроизведение выключено");
                               },
                               icon: Icon(Icons.swap_vert, color: iconColor,)),
 
@@ -152,7 +152,7 @@ class _MediatekaState extends State<Mediateka> {
                               onPressed: (){
                                 provider.switchShuffle(false);
                                 provider.setLoopMode(provider.player.loopMode == LoopMode.all ? LoopMode.off : LoopMode.all);
-                                showNotification(context, provider.player.loopMode == LoopMode.all ? "Включён цикличный режим воспроизведения" : "Цикличный режим воспроизведения выключен");
+                                showNotification(provider.player.loopMode == LoopMode.all ? "Включён цикличный режим воспроизведения" : "Цикличный режим воспроизведения выключен");
                               },
                               icon: Icon(Icons.loop, color: iconColor,)),
                         ],

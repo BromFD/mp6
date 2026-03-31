@@ -25,7 +25,7 @@ class _MenuState extends State<Menu> {
       backgroundColor: backgroundColor,
       body: SafeArea(
           child: Padding(
-            padding: EdgeInsets.all(screenHeight * 0.15),
+            padding: EdgeInsets.symmetric(vertical: screenHeight * 0.15),
             child: ListView(
               children: [
 
@@ -53,9 +53,7 @@ class _MenuState extends State<Menu> {
                         borderRadius: BorderRadius.circular(30),
                         color: textColor,
                       ),
-                        onTap: (){
-                          provider.loaded ? Navigator.pushNamed(context, "/mediateka") : null;
-                        },
+                        action: () => provider.loaded ? Navigator.pushNamed(context, "/mediateka") : null,
                         child: Padding(
                           padding: EdgeInsets.all(screenHeight * 0.025),
                           child: Icon(Icons.folder_outlined, color: backgroundColor, size: screenHeight * 0.075,),
@@ -67,9 +65,7 @@ class _MenuState extends State<Menu> {
                         borderRadius: BorderRadius.circular(30),
                         color: textColor,
                       ),
-                      onTap: (){
-                        provider.loaded ? Navigator.pushNamed(context, "/playlist") : null;
-                      },
+                      action: () => provider.loaded ? Navigator.pushNamed(context, "/playlist") : null,
                       child: Padding(
                         padding: EdgeInsets.all(screenHeight * 0.025),
                         child: Icon(Icons.playlist_play_outlined, color: backgroundColor, size: screenHeight * 0.075,),
@@ -91,9 +87,7 @@ class _MenuState extends State<Menu> {
                         borderRadius: BorderRadius.circular(30),
                         color: textColor,
                       ),
-                      onTap: (){
-                        provider.loaded ? Navigator.pushNamed(context, "/search&load") : null;
-                      },
+                      action: () => provider.loaded ? Navigator.pushNamed(context, "/search&load") : null,
                       child: Padding(
                         padding: EdgeInsets.all(screenHeight * 0.025),
                         child: Icon(Icons.search_outlined, color: backgroundColor, size: screenHeight * 0.075,),
@@ -105,9 +99,7 @@ class _MenuState extends State<Menu> {
                         borderRadius: BorderRadius.circular(30),
                         color: textColor,
                       ),
-                      onTap: (){
-
-                      },
+                      action: null,
                       child: Padding(
                         padding: EdgeInsets.all(screenHeight * 0.025),
                         child: Icon(Icons.tune_outlined, color: backgroundColor, size: screenHeight * 0.075,),
@@ -129,9 +121,7 @@ class _MenuState extends State<Menu> {
                         borderRadius: BorderRadius.circular(30),
                         color: textColor,
                       ),
-                      onTap: (){
-                        provider.loaded ? Navigator.pushNamed(context, "/settings") : null;
-                      },
+                      action: () => provider.loaded ? Navigator.pushNamed(context, "/settings") : null,
                       child: Padding(
                         padding: EdgeInsets.all(screenHeight * 0.025),
                         child: Icon(Icons.settings_outlined, color: backgroundColor, size: screenHeight * 0.075,),
@@ -145,6 +135,17 @@ class _MenuState extends State<Menu> {
             ),
           )
         ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: iconColor,
+        onPressed: () async {
+          try {
+            await provider.shareLogFile();
+          } catch(e) {
+            showNotification("Ошибка библиотеки SharePlus: ${e.toString()}");
+          }
+        },
+        child: Icon(Icons.error, color: backgroundColor,),
+      ),
     );
   }
 }

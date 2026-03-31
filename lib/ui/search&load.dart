@@ -25,7 +25,7 @@ class _SearchAndLoadState extends State<SearchAndLoad> {
   @override
   void dispose() {
     savedProvider.setCurrentPlaylist(savedProvider.currentPlaylist);
-    savedProvider.pause();
+    Future.microtask(() => savedProvider.pause());
     super.dispose();
   }
 
@@ -81,8 +81,7 @@ class _SearchAndLoadState extends State<SearchAndLoad> {
 
                       IconButton(
                           onPressed: () async {
-                            String response = await provider.searchAudioFiles(titleController.text);
-                            response != "ok" ? showNotification(context, response) : null;
+                            await provider.searchAudioFiles(titleController.text);
                             titleController.clear();
                           },
                           icon: Icon(Icons.search, color: iconColor,)

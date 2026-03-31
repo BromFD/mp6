@@ -42,7 +42,7 @@ class _SettingsState extends State<Settings> {
                             text: Text("Изменить директорию с аудиофайлами", style: TextStyle(color: Colors.white, fontSize: screenHeight * 0.0175),),
                             icon: Icon(Icons.arrow_forward_ios, color: Colors.white, size: screenHeight * 0.025,),
                             onTap: () {
-                              provider.pickAudioFilesDirectory();
+                              // provider.pickAudioFilesDirectory();
                             }
                         ),
                       ),
