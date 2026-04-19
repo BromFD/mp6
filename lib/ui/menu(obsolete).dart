@@ -99,7 +99,7 @@ class _MenuState extends State<Menu> {
                         borderRadius: BorderRadius.circular(30),
                         color: textColor,
                       ),
-                      action: null,
+                      action: () => provider.loaded ? Navigator.pushNamed(context, "/equalizer") : null,
                       child: Padding(
                         padding: EdgeInsets.all(screenHeight * 0.025),
                         child: Icon(Icons.tune_outlined, color: backgroundColor, size: screenHeight * 0.075,),

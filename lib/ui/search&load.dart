@@ -24,8 +24,10 @@ class _SearchAndLoadState extends State<SearchAndLoad> {
 
   @override
   void dispose() {
-    savedProvider.setCurrentPlaylist(savedProvider.currentPlaylist);
-    Future.microtask(() => savedProvider.pause());
+    if (savedProvider.player.sequenceState?.currentSource?.tag.id[0] == "f") {
+      savedProvider.setCurrentPlaylist(savedProvider.currentPlaylist);
+      Future.microtask(() => savedProvider.pause());
+    }
     super.dispose();
   }
 
@@ -37,6 +39,7 @@ class _SearchAndLoadState extends State<SearchAndLoad> {
     final backgroundColor = provider.colorScheme["background"];
     final iconColor = provider.colorScheme["icon"];
     final textColor = provider.colorScheme["text"];
+
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
@@ -113,6 +116,14 @@ class _SearchAndLoadState extends State<SearchAndLoad> {
             ),
           )
       ),
+
+      floatingActionButton: FloatingActionButton(
+          onPressed: () async {
+            await provider.showRedirects();
+          },
+          child: Icon(Icons.bug_report),
+      ),
+
     );
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:chuni_player_revamped/custom_widgets.dart';
 import 'package:chuni_player_revamped/log/logger.dart';
 import 'package:flutter/material.dart' hide Element;
@@ -14,17 +16,17 @@ import 'package:html/dom.dart';
 import 'package:html/dom_parsing.dart';
 import 'package:html/parser.dart';
 import 'package:punycoder/punycoder.dart';
-import 'package:photo_manager/photo_manager.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:media_store_plus/media_store_plus.dart' hide Document;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
+import 'package:on_audio_query/on_audio_query.dart';
 
 class PlayerProvider extends ChangeNotifier {
   Directory audioFilesDirectory = Directory("/storage/emulated/0/Music"); // Папка с музыкой
-  List<Uri> audioFilesPaths = []; // Пути к файлам внутри папки с музыкой
+  List<Uri> audioFilesUris = []; // Пути к файлам внутри папки с музыкой
   List<Map<String, dynamic>> audioFiles = []; // Список аудиофайлов с метаданными
   List<AudioSource> audioSources = []; // Список текущих треков с которыми будет работать аудио плеер (UI тоже будет полагатся на него)
   Set<int> audioSourcesIndexes = {}; // Индексы audioSources которые будут добавлены в плейлист
@@ -34,7 +36,11 @@ class PlayerProvider extends ChangeNotifier {
     "text": 0xFFFFFFFF,
   };
   Map<String, Color> colorScheme = {};  // Отвечает за цветовую схему которую пользователь выбирает в настройках
-  final AudioPlayer player = AudioPlayer(); // Экземпляр класса AudioPlayer
+  final equalizer = AndroidEqualizer(); // Эквалайзер
+  late final AndroidEqualizerParameters parameters; // Параметры эквалайзера
+  late final List<AndroidEqualizerBand> bands; // Дорожки
+  List<double> gainList = []; // Усиление дорожек
+  AudioPlayer player = AudioPlayer(); // Экземпляр класса AudioPlayer
   Map<String, dynamic>? currentAudioFile; // Текущий включенный трек и его метаданные
   Map<String, Set<int>> playlists = {}; // Хранит плейлисты
   bool isUserMakingPlaylist = false; // Используется для того, чтобы реюзнуть страницу медиатеки, для выбора песен в плейлисте.
@@ -45,13 +51,10 @@ class PlayerProvider extends ChangeNotifier {
   bool isSearchMode = false; // Показывает использовал ли пользователь поиск
   Map<int, int> indexesOfSearchedAudios = {}; // Индекс найденного поиском трека в его плейлисте
   int sleepId = 0; // Нужен для того, чтобы сработала только последняя функция ухода в сон, также позволяет отменить уход в сон
-  List<Map<String, String>> foundAudioFiles = []; // Отображает найденные в поиске по интернету(Ютубу) треки
+  List<Map<String, String>> foundAudioFiles = []; // Отображает найденные в поиске по интернету треки
   final dio = Dio( // Делает запросы
       BaseOptions(
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 10),
         followRedirects: true,
-        // validateStatus: (status) => status != null && status >= 200 && status < 400,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -63,7 +66,10 @@ class PlayerProvider extends ChangeNotifier {
   bool loaded = false; // Чекает прогружены ли треки на старте
   late int sdkVersion; // Текущая версия SDK
   final mediaStorePlugin = MediaStore(); // Объект класса медиастор, тащит из файлов URI
-  List<AssetEntity> mediaStoreAudio = []; // Хранит объекты найденных через медиастор песен
+  final onAudioQuery = OnAudioQuery(); // Старый, но не добрый товарищ
+  bool ignoreInterruptions = false; // Отвечает за игнорирование прерывания воспроизведения
+  Set<int> favoriteAudios = {}; // Избранные треки
+  List<String> redirects = [];
 
   PlayerProvider() { // Срабатывает на старте
     onLaunch();
@@ -74,20 +80,31 @@ class PlayerProvider extends ChangeNotifier {
   // Штуки которые мы делаем 1 раз при загрузке приложения
   Future<void> onLaunch () async {
     MediaStore.appFolder = "ChuniPlayer"; // Ставит папку для media_store_plus
+    await loadItemsFromBoxes(); // Загружает элементы из коробок
     await checkSdk(); // Смотрит и ставит SDK версию
     await askPermissions(); // Разрешения
-    await loadItemsFromBoxes(); // Загружает элементы из коробок
-    sdkVersion >= 31 ? await scanAudioFiles() : await scanAudioFilesObsolete();
+    player = AudioPlayer(
+      handleInterruptions: !ignoreInterruptions,
+      audioPipeline: AudioPipeline(
+          androidAudioEffects: [
+            equalizer,
+          ]
+      )
+    ); // Создаём плеер
+    await scanAudioFiles();
     colorScheme.isEmpty ? updateColors() : null;
-    await loadAudioFiles(); // Загружает аудиофайлы 1 раз при старте
     player.currentIndexStream.listen((index) { //Автоматическое обновление информации о текущем аудиофайле при смене индекса трека
       if (index != null && audioSources.isNotEmpty) {
         currentAudioFile = audioFiles[int.parse((audioSources[index] as IndexedAudioSource).tag.id)];
         notifyListeners();
       }
     });
+    await initializeEqualizer();
     await prepareCookieManager();
+    await MediaStore.ensureInitialized();
+    await loadGain();
     loaded = true;
+    notifyListeners();
   }
 
   // Проверка SDK версии
@@ -104,83 +121,18 @@ class PlayerProvider extends ChangeNotifier {
         if (await Permission.audio.isDenied) {
           await Permission.audio.request();
         }
+        if (await Permission.videos.isDenied) {
+          await Permission.videos.request();
+        }
+        if (await Permission.photos.isDenied) {
+          await Permission.photos.request();
+        }
       } else {
         if (await Permission.storage.isDenied) {
           await Permission.storage.request();
         }
       }
     }
-  }
-
-  // Сканирование аудио файлов с помощью PhotoManager
-  Future<void> scanAudioFiles() async {
-
-  await MediaStore.ensureInitialized();
-  final PermissionState ps = await PhotoManager.requestPermissionExtend(
-    requestOption: const PermissionRequestOption(
-      androidPermission: AndroidPermission(
-          type: RequestType.audio,
-          mediaLocation: false,
-      )
-    )
-  );
-  if (!ps.isAuth) {
-    print('Нет разрешения на доступ к медиафайлам');
-    return;
-  }
-
-  List<AssetEntity> assets = [];
-  final List<AssetPathEntity> audioDirs = await PhotoManager.getAssetPathList(
-    type: RequestType.audio,
-    onlyAll: true,
-  );
-
-  if (audioDirs.isEmpty) return;
-  final allAudio = audioDirs.first;
-  const int pageSize = 50;
-  int page = 0;
-
-  while (true) {
-    final batch = await allAudio.getAssetListPaged(page: page, size: pageSize);
-    if (batch.isEmpty) break;
-    assets.addAll(batch);
-    page++;
-  }
-
-  mediaStoreAudio = assets;
-}
-
-  // Сканирование для старых андройдов
-  Future<void> scanAudioFilesObsolete() async {
-      final List<String> supportedFormats = ['.mp3', '.flac', '.m4a', '.wav', '.ogg'];
-      List<Uri> foundSongs = [];
-
-      List<Directory> directoriesToScan = [Directory("/storage/emulated/0/")];
-
-      while (directoriesToScan.isNotEmpty) {
-        Directory currentDir = directoriesToScan.removeAt(0);
-
-        try {
-          Stream<FileSystemEntity> entities = currentDir.list(recursive: false, followLinks: true);
-
-          await for (var entity in entities) {
-            if (entity is Directory) {
-              String folderName = p.basename(entity.path);
-              if (!folderName.startsWith('.') && folderName != 'Android') {
-                directoriesToScan.add(entity);
-              }
-            } else if (entity is File) {
-              String ext = p.extension(entity.path).toLowerCase();
-              if (supportedFormats.contains(ext)) {
-                foundSongs.add(entity.uri);
-              }
-            }
-          }
-        } catch (e) {
-          continue;
-        }
-      }
-      audioFilesPaths = foundSongs;
   }
 
   // Поделится лог файлом
@@ -204,6 +156,47 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 
+  // Изменяет переменную отвечающую за то как плеер реагирут на попытки поставить его на паузу извне
+  void setInterruptionMode(bool mode) {
+    ignoreInterruptions = mode;
+    addItemToBox(ignoreInterruptions, "ignoreInterruptions");
+    notifyListeners();
+  }
+
+  // Сканирование и загрузка аудио файлов с помощью on_audio_query
+  Future<void> scanAudioFiles() async {
+    audioFiles = [];
+    if (await onAudioQuery.permissionsStatus()) {
+      List<SongModel> audios = await onAudioQuery.querySongs(
+        sortType: SongSortType.TITLE,
+        orderType: OrderType.ASC_OR_SMALLER,
+        uriType: UriType.EXTERNAL,
+        ignoreCase: true,
+      );
+
+      int index = 0;
+      for (var audio in audios) {
+        try {
+          Metadata metadata = await MetadataGod.readMetadata(file: audio.data);
+          Map<String, dynamic> audioFile = {
+            "id": index,
+            "uri": Uri.parse(audio.uri!),
+            "name": audio.title,
+            "picture": metadata.picture,
+            "duration": metadata.durationMs,
+            "size": metadata.fileSize,
+          };
+          audioFiles.add(audioFile);
+          index++;
+        } catch (e) {
+          appLog.e(e);
+          null;
+        }
+      }
+      createMainList();
+  }
+}
+
   //Выбор директории c аудио файлами при помощи библиотеки FilePicker
   //Временно убран (Может и навсегда)
   /* Future<void> pickAudioFilesDirectory() async {
@@ -219,61 +212,6 @@ class PlayerProvider extends ChangeNotifier {
 
   // Функции для работы с аудио
 
-  //Загрузка аудио файлов
-  Future<void> loadAudioFiles() async {
-    audioFiles = [];
-    if (sdkVersion >= 31) {
-      try {
-        int index = 0;
-        for (var asset in mediaStoreAudio) {
-          File? tempFile = await asset.file;
-          if (tempFile != null) {
-            final metadata = await MetadataGod.readMetadata(file: tempFile.path);
-            final uri = await mediaStorePlugin.getUriFromFilePath(path: tempFile.path);
-
-            Map<String, dynamic> audioFile = {
-              "id": index,
-              "uri": uri,
-              "name": p.basename(tempFile.path),
-              "picture": metadata.picture,
-              "duration": metadata.durationMs,
-              "size": metadata.fileSize,
-            };
-            audioFiles.add(audioFile);
-            index++;
-          }
-        }
-      }  catch (e) {
-        null;
-      }
-    } else {
-      /* audioFilesPaths.isEmpty ? audioFilesPaths = [
-        for (var file in audioFilesDirectory.listSync()) if(file is File) file
-            .uri
-      ] : null; */
-      int index = 0;
-      for (var uri in audioFilesPaths) {
-        try {
-          String path = File.fromUri(uri).path;
-          Metadata metadata = await MetadataGod.readMetadata(file: path);
-          Map<String, dynamic> audioFile = {
-            "id": index,
-            "uri": uri,
-            "name": p.basename(path),
-            "picture": metadata.picture,
-            "duration": metadata.durationMs,
-            "size": metadata.fileSize,
-          };
-          audioFiles.add(audioFile);
-          index++;
-        } catch (e) {
-          null;
-        }
-      }
-    }
-    createMainList();
-  }
-
   // Задание списка всех треков для управления
   Future<void> createMainList () async {
     audioSourcesIndexes = {for (var index = 0; index < audioFiles.length; index++) index};
@@ -286,6 +224,7 @@ class PlayerProvider extends ChangeNotifier {
           title: audioFiles[index]["name"],
         ),
     )];
+    audioSourcesIndexes = {};
     notifyListeners();
     await player.setAudioSources(audioSources, initialIndex: 0, initialPosition: Duration.zero,
     shuffleOrder: DefaultShuffleOrder());
@@ -424,6 +363,33 @@ class PlayerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Добавляет в избранное
+  void addToFavorites(int index) {
+    favoriteAudios.add(index);
+    addItemToBox(favoriteAudios.toList(), "favoriteAudios");
+    notifyListeners();
+  }
+
+  // Убирает из избранного
+  void removeFromFavorites(int index) {
+    favoriteAudios.remove(index);
+    addItemToBox(favoriteAudios.toList(), "favoriteAudios");
+    notifyListeners();
+  }
+
+  Future<void> setFavoriteAudios() async {
+    audioSources = [for (var index in favoriteAudios) AudioSource.uri(
+      audioFiles[index]["uri"],
+      tag: MediaItem(
+        id: '$index',
+        title: audioFiles[index]["name"],
+      ),
+    )];
+    await player.setAudioSources(audioSources, initialIndex: 0, initialPosition: Duration.zero,
+        shuffleOrder: DefaultShuffleOrder());
+    notifyListeners();
+  }
+
   // Тут понятно из названия и содержания
   void switchAddToExistingPlaylistFlag() {
     isUserAddToExistingPlaylist ? isUserAddToExistingPlaylist = false : isUserAddToExistingPlaylist = true;
@@ -432,6 +398,7 @@ class PlayerProvider extends ChangeNotifier {
 
   // Переключает смешанный режим воспроизведения
   void switchShuffle(bool enabled) {
+    player.shuffle();
     player.setShuffleModeEnabled(enabled);
     notifyListeners();
   }
@@ -501,6 +468,31 @@ class PlayerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Эквалайзер
+
+  Future<void> initializeEqualizer() async {
+    parameters = await equalizer.parameters;
+    bands = parameters.bands;
+    equalizer.setEnabled(true);
+    notifyListeners();
+  }
+
+  void setGainList() async {
+    gainList = [for (var band in bands) band.gain];
+    addItemToBox(gainList, "gainList");
+  }
+
+  Future<void> loadGain() async {
+    if (gainList.isNotEmpty) {
+      int index = 0;
+      for (var band in bands) {
+        band.setGain(gainList[index]);
+        index += 1;
+      }
+      notifyListeners();
+    }
+  }
+
   // Функции для изменения внешнего вида приложения
 
   //Изменение цветовой схемы приложения
@@ -564,31 +556,37 @@ class PlayerProvider extends ChangeNotifier {
     dio.interceptors.add(CookieManager(cookieJar));
   }
 
+  Future<void> showRedirects() async {
+    for (var redirect in redirects) {
+      showNotification(redirect);
+      await Future.delayed(Duration(seconds: 3));
+    }
+  }
+
   // Ищет аудио по названию
   Future<void> searchAudioFiles(String title) async {
     String correctTitle = generateCorrectTitle(title);
     String searchQueryLink = Uri.parse("https://$correctTitle.skysound7.com/").toString();
+    Response? response;
     try {
-      var response = await dio.get(searchQueryLink);
-      if (response.statusCode == 200) {
-        Document searchQueryPage = parse(response.data);
-        List<Element> foundAudio = searchQueryPage.querySelectorAll('[class*="adv_list_track"]');
-        foundAudioFiles = [
-          for (var audioData in foundAudio)
-            {
-              "name": audioData.querySelector('[class*="adv_name"]')?.querySelector("em")?.text ?? "",
-              "artist": audioData.querySelector('[class*="adv_artist"]')?.text ?? "",
-              "duration": audioData.querySelector('[class*="adv_duration"]')?.text ?? "",
-              "trackPageUrl": audioData.querySelector('[class*="playlist-down"]')?.attributes['href'] ?? "",
-            }
-        ];
-      } else {
-      }
-      notifyListeners();
+      response = await dio.get(searchQueryLink);
     } on DioException catch (e) {
       appLog.e(e);
-      showNotification(e.toString());
     }
+    if (response!.statusCode == 200) {
+      Document searchQueryPage = parse(response.data);
+      List<Element> foundAudio = searchQueryPage.querySelectorAll('[class*="adv_list_track"]');
+      foundAudioFiles = [
+        for (var audioData in foundAudio)
+          {
+            "name": audioData.querySelector('[class*="adv_name"]')?.querySelector("em")?.text ?? "",
+            "artist": audioData.querySelector('[class*="adv_artist"]')?.text ?? "",
+            "duration": audioData.querySelector('[class*="adv_duration"]')?.text ?? "",
+            "trackPageUrl": audioData.querySelector('[class*="playlist-down"]')?.attributes['href'] ?? "",
+          }
+      ];
+    }
+    notifyListeners();
   }
 
   // Скачивает аудио
@@ -623,8 +621,7 @@ class PlayerProvider extends ChangeNotifier {
           }
         }
       }
-      sdkVersion >= 31 ? await scanAudioFiles() : await scanAudioFilesObsolete();
-      await loadAudioFiles();
+      await scanAudioFiles();
       pause();
       return showNotification("Файл скачен успешно");
 
@@ -694,6 +691,9 @@ class PlayerProvider extends ChangeNotifier {
     playlists = convertRawToOriginal(rawPlaylists, "playlist");
     colorSchemeHexCodes = convertRawToOriginal(rawColorScheme, "colorScheme");
     audioFilesDirectory = Directory(playerData.get("audioFilesDirectory", defaultValue: audioFilesDirectory.path).toString());
+    gainList = [for (var gain in playerData.get("gainList", defaultValue: [])) (gain as double)];
+    ignoreInterruptions = playerData.get("ignoreInterruptions", defaultValue: false);
+    favoriteAudios = {for (var index in playerData.get("favoriteAudios", defaultValue: [])) (index as int)};
     updateColors();
     notifyListeners();
   }

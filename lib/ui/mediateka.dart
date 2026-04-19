@@ -15,6 +15,7 @@ class Mediateka extends StatefulWidget {
 class _MediatekaState extends State<Mediateka> {
   late final TextEditingController searchController;
   late final TextEditingController timeController;
+  final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
@@ -34,73 +35,188 @@ class _MediatekaState extends State<Mediateka> {
     final textColor = provider.colorScheme["text"];
     final bool isPlaying = provider.player.playing;
     final bool isUserMakingPlaylist = provider.isUserMakingPlaylist;
-    return Scaffold(
+    final bool isLoaded = provider.loaded;
+    
+    return !isLoaded ? Scaffold(
+      body: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Center(child: CircularProgressIndicator()),
+        ],
+      ),
+    ) : Scaffold(
+      key: scaffoldKey,
       backgroundColor: backgroundColor,
-      endDrawer: Drawer(
-        width: screenWidth,
+      drawer: Drawer(
+        width: screenWidth * 0.5,
         backgroundColor: backgroundColor,
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.05),
           child: ListView(
             children: [
 
-              SizedBox(
-                height: screenHeight * 0.1,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-
-                    Icon(Icons.alarm, color: iconColor,),
-                    Text("Установить таймер на", style: TextStyle(color: textColor),),
-                    SizedBox(
-                        width: screenWidth * 0.075,
-                        child: TextField(
-                          controller: timeController,
-                          style: TextStyle(color: textColor),
-                          cursorColor: textColor,
-                          decoration: InputDecoration(
-                            border: UnderlineInputBorder(
-                              borderSide: BorderSide(color: textColor!),
-                            ),
-                            focusedBorder: UnderlineInputBorder(
-                              borderSide: BorderSide(color: textColor),
-                            ),
-                          ),
-                        ),
-                      ),
-                    Text("минут", style: TextStyle(color: textColor),),
-                    IconButton(
-                        onPressed: () {
-                          if (int.tryParse(timeController.text) != null) {
-                            provider.setSleepTimer(int.parse(timeController.text));
-                            showNotification("Таймер сна установлен на ${timeController.text} минут");
-                            timeController.clear();
-                          } else {
-                            showNotification("Молодец, тестировщик");
-                            timeController.clear();
-                          }
-                        },
-                        icon: Icon(Icons.check, color: iconColor,),
-                    ),
-                    IconButton(
-                      onPressed: () {
-                        provider.denySleepTimer();
-                        showNotification("Текущий таймер сна отменён");
-                      },
-                      icon: Icon(Icons.close, color: iconColor,),
-                    ),
-                  ],
+                DrawerListTile(
+                  borderColor: textColor!,
+                  child: Icon(Icons.settings, size: screenHeight * 0.05, color: iconColor,),
                 ),
-              ),
 
-              VolumeSlider(
-                  context: context,
-                  iconColor: iconColor!,
-                  textColor: textColor,
-              )
+                DrawerListTile(
+                  borderColor: textColor,
+                  action: () => Navigator.pushNamed(context, "/settings"),
+                  child: Text("Настройки", style: TextStyle(color: textColor, fontSize: 0.02 * screenHeight),),
+                ),
 
-            ],
+                DrawerListTile(
+                  borderColor: textColor,
+                  action: () => showDialog(
+                      context: context,
+                      builder: (BuildContext context) => AlertDialog(
+                        title: Text("Установить таймер сна"),
+                        actions: [
+
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.alarm, color: iconColor, size: screenHeight * 0.05,),
+                              Padding(
+                                padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.025),
+                                child: SizedBox(
+                                  width: screenWidth * 0.075,
+                                  child: TextField(
+                                    controller: timeController,
+                                    style: TextStyle(color: Colors.black),
+                                    cursorColor: Colors.black,
+                                    decoration: InputDecoration(
+                                      border: UnderlineInputBorder(
+                                        borderSide: BorderSide(color: Colors.black),
+                                      ),
+                                      focusedBorder: UnderlineInputBorder(
+                                        borderSide: BorderSide(color: Colors.black),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Text("минут", style: TextStyle(color: Colors.black, fontSize: 0.025 * screenHeight),),
+                            ],
+                          ),
+
+                          Padding(padding: EdgeInsets.symmetric(vertical: screenHeight * 0.025)),
+
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+
+                              Container(
+                                width: screenWidth * 0.3,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: BoxBorder.all(
+                                    width: 3,
+                                  )
+                                ),
+                                child: IconButton(
+                                  onPressed: () {
+                                    if (int.tryParse(timeController.text) != null) {
+                                      provider.setSleepTimer(int.parse(timeController.text));
+                                      showNotification("Таймер сна установлен на ${timeController.text} минут");
+                                      timeController.clear();
+                                    } else {
+                                      showNotification("Молодец, тестировщик");
+                                      timeController.clear();
+                                    }
+                                  },
+                                  icon: Icon(Icons.check, color: iconColor,),
+                                ),
+                              ),
+
+                              Container(
+                                width: screenWidth * 0.3,
+                                decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: BoxBorder.all(
+                                        width: 3
+                                    )
+                                ),
+                                child: IconButton(
+                                  onPressed: () {
+                                    provider.denySleepTimer();
+                                    showNotification("Текущий таймер сна отменён");
+                                  },
+                                  icon: Icon(Icons.close, color: iconColor,),
+                                ),
+                              ),
+                            ],
+                          )
+                        ],
+                      )
+                    ),
+                  child: Text("Установить таймер сна", style: TextStyle(color: textColor, fontSize: 0.02 * screenHeight),),
+                ),
+
+                DrawerListTile(
+                  borderColor: textColor,
+                  action: () => showDialog(
+                    context: context,
+                    builder: (BuildContext context) => AlertDialog(
+                      title: Text("Изменить громкость плеера"),
+                      actions: [
+                        VolumeSlider(
+                            context: context,
+                            iconColor: iconColor!,
+                            textColor: Colors.black,
+                        )
+                      ],
+                    ),
+                  ),
+                  child: Text("Изменить громкость плеера", style: TextStyle(color: textColor, fontSize: 0.02 * screenHeight),),
+                ),
+
+                DrawerListTile(
+                  borderColor: textColor,
+                  child: Text("О нас", style: TextStyle(color: textColor, fontSize: 0.02 * screenHeight),),
+                ),
+
+              ],
+            ),
           ),
+        ),
+      endDrawer: Drawer(
+        width: screenWidth * 0.5,
+        backgroundColor: backgroundColor,
+        child: ListView(
+          children: [
+
+            DrawerListTile(
+              borderColor: textColor,
+              child: Text("Меню", style: TextStyle(color: textColor, fontSize: 0.035 * screenHeight),),
+            ),
+
+            DrawerListTile(
+              borderColor: textColor,
+              action: () => Navigator.pushNamed(context, "/playlist"),
+              child: Text("Плейлисты", style: TextStyle(color: textColor, fontSize: 0.02 * screenHeight),),
+            ),
+
+            DrawerListTile(
+              borderColor: textColor,
+              action: () => Navigator.pushNamed(context, "/search&load"),
+              child: Text("Поиск песни", style: TextStyle(color: textColor, fontSize: 0.02 * screenHeight),),
+            ),
+
+            DrawerListTile(
+              borderColor: textColor,
+              action: () => Navigator.pushNamed(context, "/equalizer"),
+              child: Text("Эквалайзер", style: TextStyle(color: textColor, fontSize: 0.02 * screenHeight),),
+            ),
+
+            DrawerListTile(
+              borderColor: textColor,
+              action: () => provider.setFavoriteAudios(),
+              child: Text("Избранное", style: TextStyle(color: textColor, fontSize: 0.02 * screenHeight),),
+            )
+
+          ],
         ),
       ),
       appBar: AppBar(
@@ -111,10 +227,18 @@ class _MediatekaState extends State<Mediateka> {
         backgroundColor: backgroundColor,
         leading: provider.isUserMakingPlaylist ? SizedBox.shrink() : IconButton(
           onPressed: () {
-            Navigator.pushNamed(context, "/");
+            scaffoldKey.currentState?.openDrawer();
           },
-          icon: Icon(Icons.arrow_back),
+          icon: Icon(Icons.settings, size: screenHeight * 0.05,),
         ),
+        actions: [
+          provider.isUserMakingPlaylist ? SizedBox.shrink() : IconButton(
+              onPressed: () {
+                scaffoldKey.currentState?.openEndDrawer();
+              }, 
+              icon: Icon(Icons.menu, size: screenHeight * 0.05,)
+          )
+        ],
       ),
       body: SafeArea(
           child: Column(
@@ -193,7 +317,7 @@ class _MediatekaState extends State<Mediateka> {
                     return MediatekaListTile(
                       index: index,
                       context: context,
-                      iconColor: iconColor,
+                      iconColor: iconColor!,
                       textColor: textColor,
                       isUserMakingPlaylist: isUserMakingPlaylist,
                     );

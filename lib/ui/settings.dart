@@ -17,6 +17,7 @@ class _SettingsState extends State<Settings> {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     final provider = context.watch<PlayerProvider>();
+    String interruptionMode = provider.ignoreInterruptions ? "Да" : "Нет";
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -167,7 +168,59 @@ class _SettingsState extends State<Settings> {
                       ),
 
                     ]
-                )
+                ),
+
+                Text("НАСТРОЙКИ ПОВЕДЕНИЯ ПЛЕЕРА", style: TextStyle(color: Colors.white, fontSize: screenHeight * 0.0175),),
+                SettingSector(children: [
+                    SizedBox(
+                      height: screenHeight * 0.075,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.03),
+                        child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text("Игнорировать прерывания", style: TextStyle(color: Colors.white, fontSize: screenHeight * 0.0175),),
+                              SizedBox(
+                                width: screenWidth * 0.3,
+                                height: screenHeight * 0.05,
+                                child: DropdownMenu(
+                                  initialSelection: interruptionMode,
+                                  textStyle: TextStyle(
+                                    color: Colors.white, // Твой основной цвет из темы
+                                    fontSize: 14,
+                                  ),
+                                  inputDecorationTheme: InputDecorationTheme(
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                                    constraints: BoxConstraints(
+                                      maxHeight: screenHeight * 0.05,
+                                    ),
+                                    border: const OutlineInputBorder(),
+                                  ),
+                                  dropdownMenuEntries: [
+                                    DropdownMenuEntry(
+                                        value: "Нет",
+                                        label: "Нет",
+                                    ),
+
+                                    DropdownMenuEntry(
+                                      value: "Да",
+                                      label: "Да",
+                                    )
+                                  ],
+                                  onSelected: (newValue) {
+                                    provider.setInterruptionMode(newValue == "Да" ? true : false);
+                                    showNotification("Изменения вступят в силу после перезапуска");
+                                  },
+
+
+                                ),
+                              )
+                          ]
+                        ),
+                      ),
+                    ),
+                  ]
+                ),
               ],
             ),
           )

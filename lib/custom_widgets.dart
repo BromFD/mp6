@@ -1,3 +1,4 @@
+import 'package:chuni_player_revamped/log/logger.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
@@ -198,7 +199,6 @@ class MediatekaListTile extends StatefulWidget {
 }
 
 class _MediatekaListTileState extends State<MediatekaListTile> {
-  bool isSelected = false;
 
   @override
   Widget build(BuildContext context) {
@@ -207,6 +207,7 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
     final Duration duration = Duration(milliseconds: provider.audioFiles[globalIndex]["duration"].toInt());
     final String minutes = duration.inMinutes.toString();
     final String seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
+    bool isSelected = provider.audioSourcesIndexes.contains(widget.index);
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -339,6 +340,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
     double screenHeight = MediaQuery.of(context).size.height;
     final provider = context.watch<PlayerProvider>();
     final bool isPlaying = provider.player.playing;
+    final bool inFavorites = provider.favoriteAudios.contains(provider.currentAudioFile?["id"]);
 
     return Container(
       color: widget.backgroundColor,
@@ -415,8 +417,17 @@ class _MiniPlayerState extends State<MiniPlayer> {
                     },
                     icon: Icon(Icons.skip_next, color: widget.iconColor, size: screenHeight * 0.04)
                 ),
-                
-                Padding(padding: EdgeInsetsGeometry.all(screenHeight * 0.02))
+
+                IconButton(
+                    onPressed: () {
+                      if (inFavorites) {
+                        provider.removeFromFavorites(provider.currentAudioFile?["id"]);
+                      } else {
+                        provider.addToFavorites(provider.currentAudioFile?["id"]);
+                      }
+                    },
+                    icon: Icon(inFavorites ? Icons.favorite : Icons.favorite_border_outlined, color: widget.iconColor, size: screenHeight * 0.04)
+                ),
 
               ],
             ),
@@ -543,7 +554,7 @@ class _PlaylistCreationAlertDialogState extends State<PlaylistCreationAlertDialo
               await provider.switchPlaylistCreationFlag();
               provider.createPlaylist(nameController.text);
               nameController.clear();
-              Navigator.pushNamed(context, "/mediateka");
+              Navigator.pushNamed(context, "/");
             },
             icon: Icon(Icons.check)
         ),
@@ -704,11 +715,11 @@ class _PlaylistTileState extends State<PlaylistTile> {
         if (isUserAddToExistingPlaylist) {
           provider.addedAudio.add(name);
           provider.addToExistingPlaylist();
-          Navigator.pushNamedAndRemoveUntil(widget.context, "/mediateka", (route) => false);
+          Navigator.pushNamedAndRemoveUntil(widget.context, "/", (route) => false);
           provider.switchAddToExistingPlaylistFlag();
         } else {
           await provider.setCurrentPlaylist(name);
-          Navigator.pushNamed(widget.context, "/mediateka");
+          Navigator.pushNamed(widget.context, "/");
         }
       },
     );
@@ -812,6 +823,7 @@ class _VolumeSliderState extends State<VolumeSlider> {
   }
 }
 
+// Элемент списка найденный в интернете песен
 class YTSearchTile extends StatelessWidget {
   final BuildContext context;
   final int index;
@@ -869,6 +881,134 @@ class YTSearchTile extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// Слайдер полосы эквалайзера
+class BandSlider extends StatefulWidget {
+  final BuildContext context;
+  final AndroidEqualizerBand band;
+  final Color textColor;
+  final Color iconColor;
+  const BandSlider({
+    super.key,
+    required this.context,
+    required this.band,
+    required this.textColor,
+    required this.iconColor
+  });
+
+  @override
+  State<BandSlider> createState() => _BandSliderState();
+}
+
+class _BandSliderState extends State<BandSlider> {
+  double dragValue = 0.0;
+  bool isDragged = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = widget.context.watch<PlayerProvider>();
+    final screenHeight = MediaQuery.of(context).size.height;
+    return StreamBuilder( // Обновляет слайдер каждый раз как меняется позиция
+        stream: widget.band.gainStream,
+        builder: (context, asyncSnapshot) {
+          return RotatedBox(
+            quarterTurns: 3,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RotatedBox(
+                  quarterTurns: 1,
+                  child: Text(
+                    dragValue == 0 ? widget.band.gain.toStringAsFixed(2) : dragValue.toStringAsFixed(2),
+                    style: TextStyle(color: widget.textColor,
+                    ),
+                  ),
+                ),
+
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 15.0,
+                    thumbSize: WidgetStateProperty.fromMap(WidgetStateMap.from({
+                      WidgetState.any : Size(15, 35)
+                    })),
+                    thumbShape: HandleThumbShape(),
+                    trackGap: 10,
+                    trackShape: GappedSliderTrackShape(),
+                  ),
+                  child: SizedBox(
+                    width: screenHeight * 0.5,
+                    child: Slider(
+                      value: dragValue == 0 ? widget.band.gain : dragValue,
+                      // Текущее положение точки зависит от положения пальца при перемещении и от текущей позиции трека в состоянии поеоя
+                      min: provider.parameters.minDecibels,
+                      max: provider.parameters.maxDecibels,
+                      onChangeStart: (value) {
+                        isDragged = true;
+                      },
+                      onChangeEnd: (value) {
+                        widget.band.setGain(dragValue);
+                        dragValue = 0;
+                        isDragged = false;
+                      },
+                      onChanged: (value) {
+                        setState(() {
+                          dragValue = value;
+                        });
+                      },
+                      activeColor: widget.iconColor,
+                      thumbColor: widget.iconColor,
+                    ),
+                  ),
+                ),
+
+                RotatedBox(
+                  quarterTurns: 1,
+                  child: Text(
+                    '${
+                        widget.band.centerFrequency.toStringAsFixed(0).length > 3
+                            ? (widget.band.centerFrequency / 1000).toStringAsFixed(1)
+                            : widget.band.centerFrequency.toStringAsFixed(0)} '
+                        '${widget.band.centerFrequency.toStringAsFixed(0).length > 3
+                            ? 'кГц'
+                            : 'Гц'}',
+                    style: TextStyle(color: widget.textColor,
+                    ),
+                  ),
+                ),
+
+              ],
+            ),
+          );
+        }
+    );
+  }
+}
+
+// Элемент drawer в Медиатеке
+class DrawerListTile extends StatelessWidget {
+  final Widget child;
+  final VoidCallback? action;
+  final Color borderColor;
+  const DrawerListTile({
+    super.key,
+    required this.child,
+    required this.borderColor,
+    this.action,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      style: ListTileStyle.drawer,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: borderColor),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      title: child,
+      onTap: action,
     );
   }
 }
