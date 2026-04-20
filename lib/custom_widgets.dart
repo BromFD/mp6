@@ -853,9 +853,14 @@ class YTSearchTile extends StatelessWidget {
 
               IconButton(
                   onPressed: () async {
-                    await provider.downloadAudio(provider.foundAudioFiles[index]["trackPageUrl"]!, provider.foundAudioFiles[index]["name"]!);
+                    await provider.downloadAudio(provider.foundAudioFiles[index]["trackPageUrl"]!, provider.foundAudioFiles[index]["name"]!, index);
                   },
-                  icon: Icon(Icons.download, color: iconColor,),
+                  icon: provider.indexOfDownloaded == index && provider.downloadProgress != 0 ?
+                      CircularProgressIndicator(
+                        value: provider.downloadProgress,
+                        valueColor: AlwaysStoppedAnimation<Color>(iconColor),
+                      )
+                      : Icon(Icons.download, color: iconColor,),
               ),
 
               IconButton(

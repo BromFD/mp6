@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:chuni_player_revamped/custom_widgets.dart';
 import 'package:chuni_player_revamped/log/logger.dart';
 import 'package:flutter/material.dart' hide Element;
@@ -69,7 +67,9 @@ class PlayerProvider extends ChangeNotifier {
   final onAudioQuery = OnAudioQuery(); // Старый, но не добрый товарищ
   bool ignoreInterruptions = false; // Отвечает за игнорирование прерывания воспроизведения
   Set<int> favoriteAudios = {}; // Избранные треки
-  List<String> redirects = [];
+  double downloadProgress = 0; // Отображает прогресс скачивания
+  int? indexOfDownloaded; // Индекс трека который скачивается в данных момент в найденных треках
+
 
   PlayerProvider() { // Срабатывает на старте
     onLaunch();
@@ -556,25 +556,30 @@ class PlayerProvider extends ChangeNotifier {
     dio.interceptors.add(CookieManager(cookieJar));
   }
 
-  Future<void> showRedirects() async {
-    for (var redirect in redirects) {
-      showNotification(redirect);
-      await Future.delayed(Duration(seconds: 3));
-    }
-  }
-
   // Ищет аудио по названию
   Future<void> searchAudioFiles(String title) async {
     String correctTitle = generateCorrectTitle(title);
     String searchQueryLink = Uri.parse("https://$correctTitle.skysound7.com/").toString();
     Response? response;
+    Document? searchQueryPage;
     try {
       response = await dio.get(searchQueryLink);
-    } on DioException catch (e) {
-      appLog.e(e);
+      searchQueryPage = parse(response.data);
+    } on Exception {
+      try {
+        response = await dio.get(
+            "http://82.202.136.97:8080/fetch",
+            queryParameters: {"target_url": searchQueryLink}
+        );
+        searchQueryPage = parse(response.data['html']);
+      } catch (e) {
+        showNotification("Не удалось установить соединение. Проверьте соединение с интернетом или отключите ВПН.");
+      }
     }
-    if (response!.statusCode == 200) {
-      Document searchQueryPage = parse(response.data);
+
+    if (searchQueryPage == null) return;
+
+    if (response?.statusCode == 200) {
       List<Element> foundAudio = searchQueryPage.querySelectorAll('[class*="adv_list_track"]');
       foundAudioFiles = [
         for (var audioData in foundAudio)
@@ -590,54 +595,94 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   // Скачивает аудио
-  Future<void> downloadAudio(String url, String name) async {
+  Future<void> downloadAudio(String url, String name, int id) async {
 
     String correctName = name.replaceAll(RegExp(r'[^\p{L}0-9 ().-]', unicode: true), "");
+    Response? response;
+    Document? trackPage;
     try {
-      var response = await dio.get(url);
-      if (response.statusCode == 200) {
-        Document trackPage = parse(response.data);
-        String? downloadLink = trackPage.getElementById("SongView")?.attributes["href"].toString();
-        Directory tempDir = await getApplicationDocumentsDirectory();
-        String tempPath = "${tempDir.path}/$correctName.mp3";
-        if (downloadLink != null) {
-          try {
-            await dio.download(downloadLink, tempPath);
-            await mediaStorePlugin.saveFile(
-                tempFilePath: tempPath,
-                dirType: DirType.audio,
-                dirName: DirName.music,
-            );
+      response = await dio.get(url);
+      trackPage = parse(response.data);
+    } on Exception {
+      try {
+        response = await dio.get(
+            "http://82.202.136.97:8080/fetch",
+            queryParameters: {"target_url": url}
+        );
+        trackPage = parse(response.data['html']);
+      } catch(e) {
+        showNotification("Не удалось установить соединение. Проверьте соединение с интернетом или отключите ВПН.");
+      }
+    }
 
-            File disposed = File(tempPath);
-            if (await disposed.exists()){
-              await disposed.delete();
+    if (trackPage == null) return;
+
+    if (response?.statusCode == 200) {
+      String? downloadLink = trackPage.getElementById("SongView")?.attributes["href"].toString();
+      Directory tempDir = await getApplicationDocumentsDirectory();
+      String tempPath = "${tempDir.path}/$correctName.mp3";
+      if (downloadLink != null) {
+        try {
+          indexOfDownloaded = id;
+          notifyListeners();
+          await dio.download(
+            downloadLink,
+            tempPath,
+            onReceiveProgress: (resieved, total) {
+              double threshold = total / 10;
+              if (resieved > threshold) {
+                downloadProgress = resieved / total;
+                threshold += total / 10;
+                notifyListeners();
+              }
             }
+          );
+          await mediaStorePlugin.saveFile(
+            tempFilePath: tempPath,
+            dirType: DirType.audio,
+            dirName: DirName.music,
+          );
 
-            showNotification("Файл скачен успешно");
-          } on Exception catch (e) {
-            appLog.e(e);
-            return showNotification(e.toString());
+          File disposed = File(tempPath);
+          if (await disposed.exists()){
+            await disposed.delete();
           }
+
+          downloadProgress = 0;
+          showNotification("Файл скачен успешно");
+          await scanAudioFiles();
+          pause();
+        } catch (e) {
+          showNotification("Ошибка скачивания");
         }
       }
-      await scanAudioFiles();
-      pause();
-      return showNotification("Файл скачен успешно");
-
-    } on DioException catch (e) {
-      appLog.e(e);
-      return showNotification(e.toString());
     }
   }
 
   // Запускает предпросмотр найденного трека
   Future<void> playFound(String url, String name, int id) async {
     String correctName = name.replaceAll(RegExp(r'[^\p{L}0-9 ().-]', unicode: true), "");
+    Response? response;
+    Document? trackPage;
     try {
-      var response = await dio.get(url);
-      if (response.statusCode == 200) {
-        Document trackPage = parse(response.data);
+      response = await dio.get(url);
+      trackPage = parse(response.data);
+    } on Exception {
+      try {
+        response = await dio.get(
+            "http://82.202.136.97:8080/fetch",
+            queryParameters: {"target_url": url}
+        );
+        trackPage = parse(response.data['html']);
+      } catch (e) {
+        showNotification("Не удалось установить соединение. Проверьте соединение с интернетом или отключите ВПН.");
+      }
+    }
+
+    if (trackPage == null) return;
+
+    if (response?.statusCode == 200) {
+      try {
         String? downloadLink = trackPage.getElementById("SongView")?.attributes["href"].toString();
         if (downloadLink != null) {
           player.stop();
@@ -648,10 +693,9 @@ class PlayerProvider extends ChangeNotifier {
           ),);
           play();
         }
+      } catch (e) {
+        showNotification("Ошибка скачивания");
       }
-    } on DioException catch (e) {
-      appLog.e(e);
-      return showNotification(e.toString());
     }
   }
 

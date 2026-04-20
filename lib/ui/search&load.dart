@@ -116,14 +116,6 @@ class _SearchAndLoadState extends State<SearchAndLoad> {
             ),
           )
       ),
-
-      floatingActionButton: FloatingActionButton(
-          onPressed: () async {
-            await provider.showRedirects();
-          },
-          child: Icon(Icons.bug_report),
-      ),
-
     );
   }
 }
