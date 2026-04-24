@@ -58,6 +58,7 @@ class _EqualizerState extends State<Equalizer> {
                 SizedBox(
                   height: screenHeight * 0.7,
                   child: ListView.separated(
+                    physics: const NeverScrollableScrollPhysics(),
                     padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.15),
                     shrinkWrap: true,
                     itemCount: provider.bands.length,

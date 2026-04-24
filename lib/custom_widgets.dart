@@ -1,11 +1,10 @@
-import 'package:chuni_player_revamped/log/logger.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:provider/provider.dart';
 import 'package:chuni_player_revamped/provider/provider.dart';
 import 'package:marquee/marquee.dart';
-import 'package:chuni_player_revamped/main.dart';
+
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -203,11 +202,11 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<PlayerProvider>();
-    final int globalIndex = widget.isUserMakingPlaylist ? widget.index : int.parse((provider.audioSources[widget.index] as IndexedAudioSource).tag.id); // Положение трека в глобальном списке(Для исправления отображения UI)
-    final Duration duration = Duration(milliseconds: provider.audioFiles[globalIndex]["duration"].toInt());
+    final int globalIndex = int.parse((provider.audioSources[widget.index] as IndexedAudioSource).tag.id);
+    final Duration duration = Duration(milliseconds: provider.audioFiles[globalIndex]?["duration"].toInt());
     final String minutes = duration.inMinutes.toString();
     final String seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
-    bool isSelected = provider.audioSourcesIndexes.contains(widget.index);
+    bool isSelected = provider.audioSourcesIds.contains(globalIndex);
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -219,17 +218,17 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
           child: ListTile(
             leading: SizedBox(
               width: width * 0.2,
-              child: provider.audioFiles[globalIndex]["picture"] != null ?
+              child: provider.audioFiles[globalIndex]?["picture"] != null ?
               Container(
                 decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                        image: DecorationImage(image: MemoryImage(provider.audioFiles[globalIndex]["picture"].data)),
+                  shape: BoxShape.circle,
+                  image: DecorationImage(image: MemoryImage(provider.audioFiles[globalIndex]?["picture"].data), fit: BoxFit.fitWidth),
                 ),
               ) :
               Icon(Icons.music_note, color: widget.iconColor,),),
             title: SizedBox(
               width: width * 0.625,
-              child: Text(provider.audioFiles[globalIndex]["name"], style: TextStyle(color: widget.textColor),)),
+              child: Text(provider.audioFiles[globalIndex]?["name"], style: TextStyle(color: widget.textColor),)),
             trailing: SizedBox(
               width: width * 0.175,
               child: Row(
@@ -285,27 +284,36 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
               ),
             ),
             onTap: () async {
-
-              widget.isUserMakingPlaylist ? (isSelected ? provider.removeAudioFromPlaylist(widget.index) : provider.addAudioToPlaylist(widget.index))
-                  : provider.isSearchMode ? null : provider.setAudioFile(widget.index);
-              setState(() {
-                widget.isUserMakingPlaylist ? (isSelected ? isSelected = false : isSelected = true) : null;
-              });
+              if (widget.isUserMakingPlaylist) {
+                if (isSelected) {
+                  provider.removeAudioFromPlaylist(globalIndex);
+                } else {
+                  provider.addAudioToPlaylist(globalIndex);
+                }
+              } else if (!provider.isSearchMode) {
+                if (provider.readyToSetAudio) {
+                  provider.setSources(initialIndex: widget.index);
+                } else {
+                  provider.setAudioFile(widget.index);
+                }
+              }
 
               if (provider.isSearchMode) {
                 await Future.delayed(Duration(milliseconds: 500));
                 provider.isSearchMode = false;
                 provider.audioSources = [for (var sourceIndex in provider.playlists[provider.currentPlaylist]!)
                   AudioSource.uri(
-                    provider.audioFiles[sourceIndex]["uri"],
+                    provider.audioFiles[sourceIndex]?["uri"],
                     tag: MediaItem(
                       id: '$sourceIndex',
-                      title: provider.audioFiles[sourceIndex]["name"],
+                      title: provider.audioFiles[sourceIndex]?["name"],
                     ),
                   )
                 ];
                 provider.setAudioFile(provider.indexesOfSearchedAudios[globalIndex]!);
                 provider.indexesOfSearchedAudios = {};
+                FocusManager.instance.primaryFocus?.unfocus();
+                provider.setIsInteractingWithInput(false);
               }
             },
           ),
@@ -340,32 +348,70 @@ class _MiniPlayerState extends State<MiniPlayer> {
     double screenHeight = MediaQuery.of(context).size.height;
     final provider = context.watch<PlayerProvider>();
     final bool isPlaying = provider.player.playing;
-    final bool inFavorites = provider.favoriteAudios.contains(provider.currentAudioFile?["id"]);
+    final bool inFavorites = provider.favoriteAudios.contains(provider.currentId);
 
     return Container(
       color: widget.backgroundColor,
       height: screenHeight,
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
 
+          Padding(padding: EdgeInsetsGeometry.only(top: screenHeight * 0.05)),
+
           SizedBox(
-            height: screenHeight * 0.2,
+            height: screenHeight * 0.1,
             width: screenWidth * 0.8,
             child: Marquee(
               text: provider.currentAudioFile!["name"],
-              style: TextStyle(color: widget.textColor, fontSize: screenHeight * 0.035),
+              style: TextStyle(color: widget.textColor, fontSize: screenHeight * 0.035,),
               scrollAxis: Axis.horizontal,
               crossAxisAlignment: CrossAxisAlignment.center,
               blankSpace: screenWidth * 0.8,
             ),
           ),
 
-          Expanded(
-            child: FittedBox(
-              fit: BoxFit.contain,
-              child: Icon(Icons.music_note, color: widget.iconColor)),
+        InkWell(
+          child: provider.audioFiles[provider.currentId]!["picture"] != null
+              ? Container(
+            width: screenHeight * 0.4,
+            height: screenHeight * 0.5,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              image: DecorationImage(image: MemoryImage(provider.audioFiles[provider.currentId]!["picture"].data), fit: BoxFit.fitWidth),
+            ),
+          )
+              : SizedBox(
+              width: screenHeight * 0.4,
+              height: screenHeight * 0.5,
+              child: FittedBox(
+                  fit: BoxFit.fitWidth,
+                  child: Icon(Icons.music_note, color: widget.iconColor)
+            )
           ),
+          onTap: () {
+            showDialog(
+                context: context, 
+                builder: (BuildContext context) => AlertDialog(
+                  title: Center(child: Text("Настройки трека")),
+                  actions: [
+                    SizedBox(
+                      width: screenWidth * 0.8,
+                      height: screenHeight * 0.1,
+                      child: SettingsEntry(
+                          text: Text("Добавить или изменить\n изображение у трека", style: TextStyle(fontSize: 18),),
+                          onTap: () async {
+                            await provider.setAudioPicture();
+                          },
+                          icon: Icon(Icons.arrow_forward_ios)
+                      ),
+                    )
+                  ],
+              )
+            );
+          },
+        ),
 
           SizedBox(
             height: screenHeight * 0.1,
@@ -421,9 +467,9 @@ class _MiniPlayerState extends State<MiniPlayer> {
                 IconButton(
                     onPressed: () {
                       if (inFavorites) {
-                        provider.removeFromFavorites(provider.currentAudioFile?["id"]);
+                        provider.removeFromFavorites(provider.currentId!);
                       } else {
-                        provider.addToFavorites(provider.currentAudioFile?["id"]);
+                        provider.addToFavorites(provider.currentId!);
                       }
                     },
                     icon: Icon(inFavorites ? Icons.favorite : Icons.favorite_border_outlined, color: widget.iconColor, size: screenHeight * 0.04)

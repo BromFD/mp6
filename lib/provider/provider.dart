@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:chuni_player_revamped/classes/classes.dart';
 import 'package:chuni_player_revamped/custom_widgets.dart';
 import 'package:chuni_player_revamped/log/logger.dart';
 import 'package:flutter/material.dart' hide Element;
@@ -25,9 +27,9 @@ import 'package:on_audio_query/on_audio_query.dart';
 class PlayerProvider extends ChangeNotifier {
   Directory audioFilesDirectory = Directory("/storage/emulated/0/Music"); // Папка с музыкой
   List<Uri> audioFilesUris = []; // Пути к файлам внутри папки с музыкой
-  List<Map<String, dynamic>> audioFiles = []; // Список аудиофайлов с метаданными
+  Map<int, Map<String, dynamic>> audioFiles = {}; // Список аудиофайлов с метаданными
   List<AudioSource> audioSources = []; // Список текущих треков с которыми будет работать аудио плеер (UI тоже будет полагатся на него)
-  Set<int> audioSourcesIndexes = {}; // Индексы audioSources которые будут добавлены в плейлист
+  Set<int> audioSourcesIds = {}; // Индексы audioSources которые будут добавлены в плейлист
   Map<String, int> colorSchemeHexCodes = { // Hex коды цветовой схемы, нужны т.к Hive не хранит объекты типа Color
     "background": 0xFF1E1E1E,
     "icon": 0xFF9C27B0,
@@ -40,6 +42,7 @@ class PlayerProvider extends ChangeNotifier {
   List<double> gainList = []; // Усиление дорожек
   AudioPlayer player = AudioPlayer(); // Экземпляр класса AudioPlayer
   Map<String, dynamic>? currentAudioFile; // Текущий включенный трек и его метаданные
+  int? currentId; // id текущего трека в audioFiles
   Map<String, Set<int>> playlists = {}; // Хранит плейлисты
   bool isUserMakingPlaylist = false; // Используется для того, чтобы реюзнуть страницу медиатеки, для выбора песен в плейлисте.
   bool isUserAddToExistingPlaylist = false; // Используется для того, чтобы реюзнуть страницу плейлистов, для выбора плейлиста куда пользователь захочет добавить песню.
@@ -47,6 +50,7 @@ class PlayerProvider extends ChangeNotifier {
   String currentPlaylist = ""; // Текущий выбранный плейлист
   List<AudioSource> filteredSources = []; // Отфильтрованные по названию песни
   bool isSearchMode = false; // Показывает использовал ли пользователь поиск
+  bool isInteractingWithInput = false;
   Map<int, int> indexesOfSearchedAudios = {}; // Индекс найденного поиском трека в его плейлисте
   int sleepId = 0; // Нужен для того, чтобы сработала только последняя функция ухода в сон, также позволяет отменить уход в сон
   List<Map<String, String>> foundAudioFiles = []; // Отображает найденные в поиске по интернету треки
@@ -69,7 +73,10 @@ class PlayerProvider extends ChangeNotifier {
   Set<int> favoriteAudios = {}; // Избранные треки
   double downloadProgress = 0; // Отображает прогресс скачивания
   int? indexOfDownloaded; // Индекс трека который скачивается в данных момент в найденных треках
-
+  bool readyToSetAudio = false; // Показывает готовность поставить аудио сурсы
+  Map<String, dynamic> currentAudioInfo = {}; // Информация о текущем аудиотреке
+  Timer? currentAudioTimer; // Ежесекундно обновляет информацию о текущем треке
+  Map<int, String> audioPictures = {}; // Изображения к трекам
 
   PlayerProvider() { // Срабатывает на старте
     onLaunch();
@@ -92,13 +99,10 @@ class PlayerProvider extends ChangeNotifier {
       )
     ); // Создаём плеер
     await scanAudioFiles();
+    await loadAudioPictures();
     colorScheme.isEmpty ? updateColors() : null;
-    player.currentIndexStream.listen((index) { //Автоматическое обновление информации о текущем аудиофайле при смене индекса трека
-      if (index != null && audioSources.isNotEmpty) {
-        currentAudioFile = audioFiles[int.parse((audioSources[index] as IndexedAudioSource).tag.id)];
-        notifyListeners();
-      }
-    });
+    setStreams();
+    await currentAudioUpdater();
     await initializeEqualizer();
     await prepareCookieManager();
     await MediaStore.ensureInitialized();
@@ -163,9 +167,36 @@ class PlayerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Тут сидят все подписки
+  void setStreams() {
+    player.currentIndexStream.listen((index) { //Автоматическое обновление информации о текущем аудиофайле при смене индекса трека
+      if (index != null && audioSources.isNotEmpty && !readyToSetAudio) {
+        currentId = int.parse((audioSources[index] as IndexedAudioSource).tag.id);
+        currentAudioFile = audioFiles[currentId];
+        currentAudioInfo["sourceIndex"] = index;
+        notifyListeners();
+      }
+    });
+
+    player.positionStream.listen((position) {
+      if (audioSources.isNotEmpty) {
+        currentAudioInfo["position"] = position.inMicroseconds;
+      }
+    });
+  }
+
+  // Обновляет информацию о текущем треке
+  Future<void> currentAudioUpdater() async {
+    currentAudioTimer?.cancel();
+    
+    currentAudioTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+      addItemToBox(currentAudioInfo, "currentAudioInfo");
+    });
+  }
+
   // Сканирование и загрузка аудио файлов с помощью on_audio_query
   Future<void> scanAudioFiles() async {
-    audioFiles = [];
+    audioFiles = {};
     if (await onAudioQuery.permissionsStatus()) {
       List<SongModel> audios = await onAudioQuery.querySongs(
         sortType: SongSortType.TITLE,
@@ -179,14 +210,15 @@ class PlayerProvider extends ChangeNotifier {
         try {
           Metadata metadata = await MetadataGod.readMetadata(file: audio.data);
           Map<String, dynamic> audioFile = {
-            "id": index,
+            "index": index, // Индекс для связи с audioSources
             "uri": Uri.parse(audio.uri!),
+            "rawPath": audio.data,
             "name": audio.title,
             "picture": metadata.picture,
             "duration": metadata.durationMs,
             "size": metadata.fileSize,
           };
-          audioFiles.add(audioFile);
+          audioFiles[audio.id] = audioFile;
           index++;
         } catch (e) {
           appLog.e(e);
@@ -214,20 +246,13 @@ class PlayerProvider extends ChangeNotifier {
 
   // Задание списка всех треков для управления
   Future<void> createMainList () async {
-    audioSourcesIndexes = {for (var index = 0; index < audioFiles.length; index++) index};
-    playlists["main"] = audioSourcesIndexes;
-    currentPlaylist = "main";
-    audioSources = [for (var index in audioSourcesIndexes) AudioSource.uri(
-      audioFiles[index]["uri"],
-        tag: MediaItem(
-          id: '$index',
-          title: audioFiles[index]["name"],
-        ),
-    )];
-    audioSourcesIndexes = {};
+    audioSourcesIds = {for (var id in audioFiles.keys) id};
+    playlists["main"] = audioSourcesIds;
+    currentPlaylist = currentAudioInfo["playlist"];
+    setCurrentPlaylist(currentPlaylist);
+    audioSourcesIds = {};
     notifyListeners();
-    await player.setAudioSources(audioSources, initialIndex: 0, initialPosition: Duration.zero,
-    shuffleOrder: DefaultShuffleOrder());
+    setSources(initialIndex: currentAudioInfo["sourceIndex"], initialPosition: Duration(microseconds: currentAudioInfo["position"]), order: List.from(currentAudioInfo["order"]));
   }
 
   // Запускает выбранный трек
@@ -235,6 +260,18 @@ class PlayerProvider extends ChangeNotifier {
     player.seek(Duration.zero, index: index);
     notifyListeners();
     play();
+  }
+
+  // Ставить аудио сурсы
+  void setSources({int initialIndex = 0, Duration initialPosition = Duration.zero, List<int> order = const []}) {
+
+    player.setAudioSources(
+        audioSources,
+        initialIndex: initialIndex,
+        initialPosition: initialPosition,
+    );
+    readyToSetAudio = false;
+    notifyListeners();
   }
 
   // Запуск проигрывания аудио файла
@@ -264,7 +301,8 @@ class PlayerProvider extends ChangeNotifier {
   // Создаёт новый плейлист
   void createPlaylist(String name) {
     playlists[name] = {};
-    audioSourcesIndexes = {};
+    audioSourcesIds = {};
+    setCurrentPlaylist("main");
     notifyListeners();
   }
 
@@ -289,28 +327,28 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   // Добавляет индекс в плейлист в процессе создания
-  void addAudioToPlaylist(int index) {
-    audioSourcesIndexes.add(index);
+  void addAudioToPlaylist(int id) {
+    audioSourcesIds.add(id);
     notifyListeners();
   }
 
   // Убирает индекс из плейлиста в процессе создания
-  void removeAudioFromPlaylist(int index) {
-    audioSourcesIndexes.remove(index);
+  void removeAudioFromPlaylist(int id) {
+    audioSourcesIds.remove(id);
     notifyListeners();
   }
 
   // Добавляет индексы треков в плейлист
   void addSourcesToPlaylist() {
-    playlists[playlists.keys.last] = audioSourcesIndexes;
-    audioSourcesIndexes = {};
+    playlists[playlists.keys.last] = audioSourcesIds;
+    audioSourcesIds = {};
     addItemToBox(playlists, "playlist");
     notifyListeners();
   }
 
   // Очищает списки id
   void clearIds() {
-    audioSourcesIndexes = {};
+    audioSourcesIds = {};
     notifyListeners();
   }
 
@@ -323,15 +361,25 @@ class PlayerProvider extends ChangeNotifier {
   // Устанавливает текущий плейлист
   Future<void> setCurrentPlaylist(String name) async {
     currentPlaylist = name;
-    audioSources = [for (var index in playlists[name]!) AudioSource.uri(
-      audioFiles[index]["uri"],
+    currentAudioInfo["playlist"] = currentPlaylist;
+    if (currentPlaylist != "favorite") {
+      audioSources = [for (var id in playlists[name]!) AudioSource.uri(
+        audioFiles[id]?["uri"],
+          tag: MediaItem(
+            id: '$id',
+            title: audioFiles[id]?["name"],
+          ),
+      )];
+    } else {
+      audioSources = [for (var id in favoriteAudios) AudioSource.uri(
+        audioFiles[id]?["uri"],
         tag: MediaItem(
-          id: '$index',
-          title: audioFiles[index]["name"],
+          id: '$id',
+          title: audioFiles[id]?["name"],
         ),
-    )];
-    await player.setAudioSources(audioSources, initialIndex: 0, initialPosition: Duration.zero,
-        shuffleOrder: DefaultShuffleOrder());
+      )];
+    }
+    readyToSetAudio = true;
     notifyListeners();
   }
 
@@ -364,8 +412,8 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   // Добавляет в избранное
-  void addToFavorites(int index) {
-    favoriteAudios.add(index);
+  void addToFavorites(int id) {
+    favoriteAudios.add(id);
     addItemToBox(favoriteAudios.toList(), "favoriteAudios");
     notifyListeners();
   }
@@ -377,19 +425,6 @@ class PlayerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setFavoriteAudios() async {
-    audioSources = [for (var index in favoriteAudios) AudioSource.uri(
-      audioFiles[index]["uri"],
-      tag: MediaItem(
-        id: '$index',
-        title: audioFiles[index]["name"],
-      ),
-    )];
-    await player.setAudioSources(audioSources, initialIndex: 0, initialPosition: Duration.zero,
-        shuffleOrder: DefaultShuffleOrder());
-    notifyListeners();
-  }
-
   // Тут понятно из названия и содержания
   void switchAddToExistingPlaylistFlag() {
     isUserAddToExistingPlaylist ? isUserAddToExistingPlaylist = false : isUserAddToExistingPlaylist = true;
@@ -398,8 +433,8 @@ class PlayerProvider extends ChangeNotifier {
 
   // Переключает смешанный режим воспроизведения
   void switchShuffle(bool enabled) {
-    player.shuffle();
     player.setShuffleModeEnabled(enabled);
+    currentAudioInfo["order"] = List<int>.from(player.effectiveIndices);
     notifyListeners();
   }
 
@@ -436,16 +471,16 @@ class PlayerProvider extends ChangeNotifier {
   Future<void> showOnlySearched(String name) async {
     isSearchMode = true;
     if (name != "") {
-      Set<int> currentPlaylistIndexes = playlists[currentPlaylist]!;
+      Set<int> currentPlaylistIds = currentPlaylist == "favorite" ? favoriteAudios : playlists[currentPlaylist]!;
       filteredSources = [];
       int index = 0;
-      for (var sourceIndex in currentPlaylistIndexes) {
-        if ((audioFiles[sourceIndex]["name"].toLowerCase()).contains(name.toLowerCase())){
+      for (var sourceIndex in currentPlaylistIds) {
+        if ((audioFiles[sourceIndex]!["name"].toLowerCase()).contains(name.toLowerCase())){
           filteredSources.add(AudioSource.uri(
-            audioFiles[sourceIndex]["uri"],
+            audioFiles[sourceIndex]!["uri"],
             tag: MediaItem(
               id: '$sourceIndex',
-              title: audioFiles[sourceIndex]["name"],
+              title: audioFiles[sourceIndex]!["name"],
               ),
             ),
           );
@@ -454,17 +489,12 @@ class PlayerProvider extends ChangeNotifier {
         index++;
       }
       audioSources = filteredSources;
-    } else {
-      audioSources = [for (var sourceIndex in playlists[currentPlaylist]!)
-        AudioSource.uri(
-          audioFiles[sourceIndex]["uri"],
-          tag: MediaItem(
-            id: '$sourceIndex',
-            title: audioFiles[sourceIndex]["name"],
-          ),
-        ),
-      ];
     }
+    notifyListeners();
+  }
+
+  void setIsInteractingWithInput(bool isInteracting) async {
+    isInteractingWithInput = isInteracting;
     notifyListeners();
   }
 
@@ -542,6 +572,28 @@ class PlayerProvider extends ChangeNotifier {
     }
     addItemToBox(colorSchemeHexCodes, "colorScheme");
     updateColors();
+  }
+
+  Future<void> loadAudioPictures() async {
+    for (var id in audioPictures.keys) {
+      audioFiles[id]!["picture"] = Picture(mimeType: "image/${audioPictures[id]!.substring(audioPictures[id]!.lastIndexOf(".") + 1)}", data: File(audioPictures[id]!).readAsBytesSync());
+    }
+    notifyListeners();
+  }
+
+  Future<void> setAudioPicture() async {
+    FilePickerResult? trackImage = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+    );
+    if (trackImage != null) {
+      String trackImagePath = trackImage.files.first.path!;
+      File trackImageFile = File(trackImagePath);
+      Picture trackPicture = Picture(mimeType: "image/${trackImagePath.substring(trackImagePath.lastIndexOf(".") + 1)}", data: trackImageFile.readAsBytesSync());
+      audioFiles[currentId]!["picture"] = trackPicture;
+      audioPictures[currentId!] = trackImagePath;
+      addItemToBox(audioPictures, "audioPictures");
+      notifyListeners();
+    }
   }
 
   // Функции связанные с поиском и скачиванием аудио с интернета
@@ -738,6 +790,15 @@ class PlayerProvider extends ChangeNotifier {
     gainList = [for (var gain in playerData.get("gainList", defaultValue: [])) (gain as double)];
     ignoreInterruptions = playerData.get("ignoreInterruptions", defaultValue: false);
     favoriteAudios = {for (var index in playerData.get("favoriteAudios", defaultValue: [])) (index as int)};
+    currentAudioInfo = {
+      "sourceIndex" : ((playerData.get("currentAudioInfo", defaultValue: {}) as Map)["sourceIndex"] as int? ?? 0),
+      "position" : ((playerData.get("currentAudioInfo", defaultValue: {}) as Map)["position"] as int? ?? 0),
+      "playlist": ((playerData.get("currentAudioInfo", defaultValue: {}) as Map)["playlist"] as String? ?? "main"),
+      "order": [for (var index in ((playerData.get("currentAudioInfo", defaultValue: {}) as Map)["order"] as List? ?? [])) index as int],
+    };
+    audioPictures = {for (var pictureInfo in (playerData.get("audioPictures", defaultValue: {}) as Map).entries)
+      pictureInfo.key as int : pictureInfo.value as String
+    };
     updateColors();
     notifyListeners();
   }

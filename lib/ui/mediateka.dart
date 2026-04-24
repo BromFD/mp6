@@ -1,3 +1,4 @@
+import 'package:chuni_player_revamped/log/logger.dart';
 import 'package:flutter/material.dart';
 import 'package:chuni_player_revamped/custom_widgets.dart';
 import 'package:provider/provider.dart';
@@ -53,6 +54,7 @@ class _MediatekaState extends State<Mediateka> {
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.05),
           child: ListView(
+            physics: const NeverScrollableScrollPhysics(),
             children: [
 
                 DrawerListTile(
@@ -174,6 +176,25 @@ class _MediatekaState extends State<Mediateka> {
 
                 DrawerListTile(
                   borderColor: textColor,
+                  action: () => showDialog(
+                      context: context,
+                      builder: (BuildContext context) => AlertDialog(
+                        title: Center(child: Text("О нас")),
+                        actions: [
+                          Text(
+                            "Плеер разработан коммандой mp6 в рамках образовательного проекта\n\n"
+                            "Разработчик: Федоров Дмитрий\n\n"
+                            "Team Lead: Бочкарёв Виталий\n\n"
+                            "Менеджер проекта: Тимофеев Пётр\n\n"
+                            "Дизайнеры: Гынга Ярослав, Тимофеев Пётр, Куликов Артём\n\n"
+                            "Тестировщики(QA): Бочкарёв Виталий, Смирнов Павел",
+                            style: TextStyle(
+                              fontSize: 18
+                            ),
+                          )
+                        ],
+                      )
+                  ),
                   child: Text("О нас", style: TextStyle(color: textColor, fontSize: 0.02 * screenHeight),),
                 ),
 
@@ -185,6 +206,7 @@ class _MediatekaState extends State<Mediateka> {
         width: screenWidth * 0.5,
         backgroundColor: backgroundColor,
         child: ListView(
+          physics: const NeverScrollableScrollPhysics(),
           children: [
 
             DrawerListTile(
@@ -212,7 +234,7 @@ class _MediatekaState extends State<Mediateka> {
 
             DrawerListTile(
               borderColor: textColor,
-              action: () => provider.setFavoriteAudios(),
+              action: () => provider.setCurrentPlaylist("favorite"),
               child: Text("Избранное", style: TextStyle(color: textColor, fontSize: 0.02 * screenHeight),),
             )
 
@@ -223,7 +245,7 @@ class _MediatekaState extends State<Mediateka> {
         iconTheme: IconThemeData(
           color: iconColor,
         ),
-        title: Center(child: Text(isUserMakingPlaylist ? "Выбрано(${provider.audioSourcesIndexes.length})" : "Медиатека", style: TextStyle(color: textColor))),
+        title: Center(child: Text(isUserMakingPlaylist ? "Выбрано(${provider.audioSourcesIds.length})" : "Медиатека", style: TextStyle(color: textColor))),
         backgroundColor: backgroundColor,
         leading: provider.isUserMakingPlaylist ? SizedBox.shrink() : IconButton(
           onPressed: () {
@@ -250,7 +272,7 @@ class _MediatekaState extends State<Mediateka> {
                   : Padding(
                 padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.05),
                 child: SizedBox(
-                  height: screenHeight * 0.05,
+                  height: screenHeight * 0.075,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -258,27 +280,57 @@ class _MediatekaState extends State<Mediateka> {
                       Row(
                         children: [
 
-                          IconButton(
-                              onPressed: (){
-                                provider.switchShuffle(true);
-                                showNotification("Включено рандомное воспроизведение");
+                          provider.isInteractingWithInput ? IconButton(
+                              onPressed: () {
+                                provider.setCurrentPlaylist(provider.currentPlaylist);
+                                searchController.text = "";
+                                FocusManager.instance.primaryFocus?.unfocus();
+                                provider.isSearchMode = false;
+                                provider.setIsInteractingWithInput(false);
                               },
-                              icon: Icon(Icons.shuffle, color: iconColor,)),
+                              icon: Icon(Icons.close, color: iconColor,),
+                          ) : SizedBox.shrink(),
 
-                          IconButton(
-                              onPressed: (){
+                          provider.isInteractingWithInput ?
+                            SizedBox.shrink()
+                            : IconButton(
+                            onPressed: (){
+                              if (provider.player.shuffleModeEnabled) {
                                 provider.switchShuffle(false);
                                 showNotification("Рандомное воспроизведение выключено");
-                              },
-                              icon: Icon(Icons.swap_vert, color: iconColor,)),
+                              } else {
+                                provider.switchShuffle(true);
+                                showNotification("Включено рандомное воспроизведение");
+                              }
+                            },
+                            icon: Container(
+                              padding: EdgeInsets.all(4.0),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: iconColor!, style: provider.player.shuffleModeEnabled ? BorderStyle.solid : BorderStyle.none)
+                              ),
+                              child: Icon(Icons.shuffle, color: iconColor,
+                              )
+                            )
+                          ),
 
-                          IconButton(
-                              onPressed: (){
-                                provider.switchShuffle(false);
+                          provider.isInteractingWithInput ?
+                          SizedBox.shrink()
+                          : IconButton(
+                              onPressed: () {
                                 provider.setLoopMode(provider.player.loopMode == LoopMode.all ? LoopMode.off : LoopMode.all);
                                 showNotification(provider.player.loopMode == LoopMode.all ? "Включён цикличный режим воспроизведения" : "Цикличный режим воспроизведения выключен");
                               },
-                              icon: Icon(Icons.loop, color: iconColor,)),
+                              icon: Container(
+                                  padding: EdgeInsets.all(4.0),
+                                  decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: iconColor!, style: provider.player.loopMode == LoopMode.all ? BorderStyle.solid : BorderStyle.none)
+                                  ),
+                                  child: Icon(Icons.loop, color: iconColor,
+                              )
+                            )
+                          ),
                         ],
 
                       ),
@@ -287,13 +339,16 @@ class _MediatekaState extends State<Mediateka> {
                         children: [
 
                           SizedBox(
-                            width: screenWidth * 0.4,
+                            width: provider.isInteractingWithInput ? screenWidth * 0.625 : screenWidth * 0.5,
                             child: TextField(
                               controller: searchController,
                               style: TextStyle(color: textColor),
                               decoration: InputDecoration(
                                 hintText: "Название песни",
                               ),
+                              onTap: () {
+                                provider.setIsInteractingWithInput(true);
+                              },
                             ),
                           ),
 
@@ -314,6 +369,7 @@ class _MediatekaState extends State<Mediateka> {
                 child: ListView.separated(
                   itemCount: isUserMakingPlaylist ? provider.audioFiles.length : provider.audioSources.length,
                   itemBuilder: (BuildContext context, int index) {
+                    List<int> playlistIdsList = provider.playlists[provider.currentPlaylist]!.toList();
                     return MediatekaListTile(
                       index: index,
                       context: context,
@@ -360,11 +416,11 @@ class _MediatekaState extends State<Mediateka> {
               :  (provider.currentAudioFile != null) ? ListTile(
                 leading: SizedBox(
                   width: screenWidth * 0.1,
-                  child: provider.audioFiles[provider.currentAudioFile!["id"]]["picture"] != null ?
+                  child: provider.audioFiles[provider.currentId]!["picture"] != null ?
                   Container(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      image: DecorationImage(image: MemoryImage(provider.audioFiles[provider.currentAudioFile!["id"]]["picture"].data)),
+                      image: DecorationImage(image: MemoryImage(provider.audioFiles[provider.currentId]!["picture"].data), fit: BoxFit.fitWidth),
                     ),
                   ) : Icon(Icons.music_note, color: iconColor, size: screenHeight * 0.04),
                 ),
