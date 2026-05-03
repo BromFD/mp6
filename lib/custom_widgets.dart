@@ -4,6 +4,7 @@ import 'package:just_audio_background/just_audio_background.dart';
 import 'package:provider/provider.dart';
 import 'package:chuni_player_revamped/provider/provider.dart';
 import 'package:marquee/marquee.dart';
+import 'package:chuni_player_revamped/log/logger.dart';
 
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -117,76 +118,84 @@ class SettingSector extends StatelessWidget {
 }
 
 // Этот виджет - всплывающее окно, вызывается когда пользователь нажимает на пункты настроек с выбором цвета
-class ColorPickerAlertDialog extends StatefulWidget {
-  final Text title;
-  final String object;
+class ThemeCreationAlertDialog extends StatefulWidget {
   final BuildContext context;
-  const ColorPickerAlertDialog({
+  const ThemeCreationAlertDialog({
     super.key,
-    required this.title,
-    required this.object,
     required this.context,
   });
 
   @override
-  State<ColorPickerAlertDialog> createState() => _ColorPickerAlertDialogState();
+  State<ThemeCreationAlertDialog> createState() => _ThemeCreationAlertDialogState();
 }
 
-class _ColorPickerAlertDialogState extends State<ColorPickerAlertDialog> {
-  late final TextEditingController colorController;
+class _ThemeCreationAlertDialogState extends State<ThemeCreationAlertDialog> {
   @override
   void initState() {
     super.initState();
-    colorController = TextEditingController();
   }
 
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(widget.context).size.width;
-    double screenHeight = MediaQuery.of(widget.context).size.width;
+    double screenHeight = MediaQuery.of(widget.context).size.height;
     final provider = widget.context.watch<PlayerProvider>();
-    return AlertDialog(
-      title: widget.title,
-      backgroundColor: Colors.white,
-      actions: <Widget>[
-        SizedBox(
-          width: screenWidth * 0.5,
-          child: TextField(
-            controller: colorController,
-            decoration: InputDecoration(
-              labelText: 'Введите цвет по hex кодировке',
-            ),
-          ),
+    return Dialog(
+      insetPadding: EdgeInsets.all(10),
+      child: SizedBox(
+          height: screenHeight * 0.8,
+          width: screenWidth * 0.8,
+          child: ListView(
+            children: [
+              Padding(
+                padding: EdgeInsets.only(top: screenHeight * 0.035, bottom: screenHeight * 0.05, left: screenWidth * 0.075, right: screenWidth * 0.075),
+                child: Text("Тут можно изменить цвет фона, фоновое изображение, цвет текста и цвет иконок для каждого отдельного раздела приложения", style: TextStyle(fontSize: screenHeight * 0.0225,),),
+              ),
+              for (String segment in ["Медиатека", "Боковые меню", "Плейлисты", "Поиск песни", "Эквалайзер", "Избранное", "Всплывающие окна"]) ...[
+
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Center(child: Text(segment, style: TextStyle(fontSize: screenHeight * 0.03),)),
+                ),
+                
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    for (IconData element in [Icons.format_paint, Icons.wallpaper, Icons.text_format, Icons.music_note]) ...[
+                      Container(
+                        width: screenWidth*0.175,
+                        height: screenWidth*0.175,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all()
+                        ),
+                        child: InkWell(
+                          child: Icon(element),
+                        ),
+                      )
+                    ]
+                  ],
+                ),
+                
+                Padding(padding: EdgeInsets.only(bottom: screenHeight * 0.05),)
+            ],
+          ],
         ),
-        IconButton(
-            onPressed: () async {
-              int? normalizedHexCode = int.tryParse(colorController.text.replaceFirst('#', 'FF'), radix: 16);
-              if (normalizedHexCode != null) {
-                await provider.changeColorScheme(normalizedHexCode, widget.object);
-              }
-              else {
-                showNotification("Неправильный hex код");
-              }
-              colorController.clear();
-              Navigator.pop(context);
-            },
-            icon: Icon(Icons.check)
-        ),
-      ],
+      ),
     );
   }
 }
 
 // Этот виджет, визуализация каждого отдельного трека в медиатеке
 class MediatekaListTile extends StatefulWidget {
-  final int index;
+  final int globalIndex;
   final BuildContext context;
   final Color textColor;
   final Color iconColor;
   final bool isUserMakingPlaylist;
   const MediatekaListTile({
     super.key,
-    required this.index,
+    required this.globalIndex,
     required this.context,
     required this.textColor,
     required this.iconColor,
@@ -202,11 +211,11 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<PlayerProvider>();
-    final int globalIndex = int.parse((provider.audioSources[widget.index] as IndexedAudioSource).tag.id);
-    final Duration duration = Duration(milliseconds: provider.audioFiles[globalIndex]?["duration"].toInt());
+    //final int globalIndex = int.parse((provider.audioSources[widget.index] as IndexedAudioSource).tag.id);
+    final Duration duration = Duration(milliseconds: provider.audioFiles[widget.globalIndex]?["duration"].toInt());
     final String minutes = duration.inMinutes.toString();
     final String seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
-    bool isSelected = provider.audioSourcesIds.contains(globalIndex);
+    bool isSelected = provider.audioSourcesIds.contains(widget.globalIndex);
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -218,17 +227,17 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
           child: ListTile(
             leading: SizedBox(
               width: width * 0.2,
-              child: provider.audioFiles[globalIndex]?["picture"] != null ?
+              child: provider.audioFiles[widget.globalIndex]?["picture"] != null ?
               Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  image: DecorationImage(image: MemoryImage(provider.audioFiles[globalIndex]?["picture"].data), fit: BoxFit.fitWidth),
+                  image: DecorationImage(image: MemoryImage(provider.audioFiles[widget.globalIndex]?["picture"].data), fit: BoxFit.fitWidth),
                 ),
               ) :
               Icon(Icons.music_note, color: widget.iconColor,),),
             title: SizedBox(
               width: width * 0.625,
-              child: Text(provider.audioFiles[globalIndex]?["name"], style: TextStyle(color: widget.textColor),)),
+              child: Text(provider.audioFiles[widget.globalIndex]?["name"], style: TextStyle(color: widget.textColor),)),
             trailing: SizedBox(
               width: width * 0.175,
               child: Row(
@@ -256,7 +265,7 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
                                       children: [
                                         TextButton(
                                             onPressed: (){
-                                              provider.addedAudio.add(globalIndex);
+                                              provider.addedAudio.add(widget.globalIndex);
                                               provider.switchAddToExistingPlaylistFlag();
                                               Navigator.pushNamed(context, "/playlist");
                                             },
@@ -265,7 +274,7 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
 
                                         provider.currentPlaylist != "main" ? TextButton(
                                             onPressed: () async {
-                                              await provider.removeFromExistingPlaylist(globalIndex);
+                                              await provider.removeFromExistingPlaylist(widget.globalIndex);
                                               Navigator.pop(context);
                                             },
                                             child: Text("Удалить аудио из плейлиста", style: TextStyle(color: Colors.black),)
@@ -286,36 +295,138 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
             onTap: () async {
               if (widget.isUserMakingPlaylist) {
                 if (isSelected) {
-                  provider.removeAudioFromPlaylist(globalIndex);
+                  provider.removeAudioFromPlaylist(widget.globalIndex);
                 } else {
-                  provider.addAudioToPlaylist(globalIndex);
+                  provider.addAudioToPlaylist(widget.globalIndex);
                 }
-              } else if (!provider.isSearchMode) {
+              } else {
                 if (provider.readyToSetAudio) {
-                  provider.setSources(initialIndex: widget.index);
+                  provider.setSources(initialIndex: provider.sourcePositionTracker[widget.globalIndex] ?? 0);
                 } else {
-                  provider.setAudioFile(widget.index);
+                  appLog.i(widget.globalIndex);
+                  provider.setAudioFile(provider.sourcePositionTracker[widget.globalIndex] ?? 0);
                 }
-              }
-
-              if (provider.isSearchMode) {
-                await Future.delayed(Duration(milliseconds: 500));
-                provider.isSearchMode = false;
-                provider.audioSources = [for (var sourceIndex in provider.playlists[provider.currentPlaylist]!)
-                  AudioSource.uri(
-                    provider.audioFiles[sourceIndex]?["uri"],
-                    tag: MediaItem(
-                      id: '$sourceIndex',
-                      title: provider.audioFiles[sourceIndex]?["name"],
-                    ),
-                  )
-                ];
-                provider.setAudioFile(provider.indexesOfSearchedAudios[globalIndex]!);
-                provider.indexesOfSearchedAudios = {};
-                FocusManager.instance.primaryFocus?.unfocus();
-                provider.setIsInteractingWithInput(false);
               }
             },
+          ),
+        );
+      },
+    );
+  }
+}
+
+class SearchTile extends StatefulWidget {
+  final int globalIndex;
+  final BuildContext context;
+  final Color textColor;
+  final Color iconColor;
+  const SearchTile({
+    super.key,
+    required this.globalIndex,
+    required this.context,
+    required this.textColor,
+    required this.iconColor,
+  });
+
+  @override
+  State<SearchTile> createState() => _SearchTileState();
+}
+
+class _SearchTileState extends State<SearchTile> {
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<PlayerProvider>();
+    //final int globalIndex = int.parse((provider.audioSources[widget.index] as IndexedAudioSource).tag.id);
+    final Duration duration = Duration(milliseconds: provider.audioFiles[widget.globalIndex]?["duration"].toInt());
+    final String minutes = duration.inMinutes.toString();
+    final String seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
+    bool isSelected = provider.audioSourcesIds.contains(widget.globalIndex);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final height = constraints.maxHeight;
+        return Container(
+          decoration: isSelected ? BoxDecoration(
+            border: Border.all(color: Colors.white, width: 3),
+          ) : BoxDecoration(),
+          child: ListTile(
+            leading: SizedBox(
+              width: width * 0.2,
+              child: provider.audioFiles[widget.globalIndex]?["picture"] != null ?
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  image: DecorationImage(image: MemoryImage(provider.audioFiles[widget.globalIndex]?["picture"].data), fit: BoxFit.fitWidth),
+                ),
+              ) :
+              Icon(Icons.music_note, color: widget.iconColor,),),
+            title: SizedBox(
+                width: width * 0.625,
+                child: Text(provider.audioFiles[widget.globalIndex]?["name"], style: TextStyle(color: widget.textColor),)),
+            trailing: SizedBox(
+              width: width * 0.175,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                      child: Text("$minutes:$seconds", style: TextStyle(color: widget.textColor),)
+                  ),
+                  SizedBox(
+                    width: width * 0.1,
+                    child: FittedBox(
+                        fit: BoxFit.contain,
+                        child: provider.isUserMakingPlaylist ? SizedBox.shrink() :
+                        IconButton(
+                          icon: Icon(Icons.more_vert, color: widget.iconColor,),
+                          onPressed: () {
+                            showDialog(
+                                context: context,
+                                builder: (context) {
+                                  return AlertDialog(
+                                    title: Text("Настройки аудио"),
+                                    actions: [
+
+                                      Column(
+                                        children: [
+                                          TextButton(
+                                              onPressed: (){
+                                                provider.addedAudio.add(widget.globalIndex);
+                                                provider.switchAddToExistingPlaylistFlag();
+                                                Navigator.pushNamed(context, "/playlist");
+                                              },
+                                              child: Text("Добавить аудио в плейлист", style: TextStyle(color: Colors.black),)
+                                          ),
+
+                                          provider.currentPlaylist != "main" ? TextButton(
+                                              onPressed: () async {
+                                                await provider.removeFromExistingPlaylist(widget.globalIndex);
+                                                Navigator.pop(context);
+                                              },
+                                              child: Text("Удалить аудио из плейлиста", style: TextStyle(color: Colors.black),)
+                                          ) : SizedBox.shrink(),
+                                        ],
+                                      ),
+                                    ],
+                                  );
+                                }
+                            );
+                          },
+                        )
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              onTap: () async {
+                provider.readyToSetAudio ? provider.setSources(initialIndex: provider.sourcePositionTracker[widget.globalIndex]!) : provider.setAudioFile(provider.sourcePositionTracker[widget.globalIndex]!);
+                provider.indexesOfSearchedAudios = [];
+                FocusManager.instance.primaryFocus?.unfocus();
+                provider.setIsInteractingWithInput(false);
+                setState(() {
+                  provider.isSearchMode = false;
+                });
+            }
           ),
         );
       },
@@ -765,6 +876,7 @@ class _PlaylistTileState extends State<PlaylistTile> {
           provider.switchAddToExistingPlaylistFlag();
         } else {
           await provider.setCurrentPlaylist(name);
+          await provider.disableShuffle();
           Navigator.pushNamed(widget.context, "/");
         }
       },

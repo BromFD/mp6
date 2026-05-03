@@ -116,57 +116,20 @@ class _SettingsState extends State<Settings> {
                       SizedBox(
                         height: screenHeight * 0.075,
                         child: SettingsEntry(
-                          text: Text("Изменить цвет заднего фона", style: TextStyle(color: Colors.white, fontSize: screenHeight * 0.0175),),
+                          text: Text("Настроить тему приложения", style: TextStyle(color: Colors.white, fontSize: screenHeight * 0.0175),),
                           icon: Icon(Icons.arrow_forward_ios, color: Colors.white, size: screenHeight * 0.025,),
                           onTap: () {
+
                             showDialog(
                                 context: context,
-                                builder: (BuildContext context) => ColorPickerAlertDialog(
-                                    title: Text("Изменить цвет заднего фона"),
-                                    object: "background",
-                                    context: context
+                                builder: (BuildContext context) => ThemeCreationAlertDialog(
+                                  context: context
                                 )
                             );
+
                           },
                         ),
                       ),
-
-                      SizedBox(
-                        height: screenHeight * 0.075,
-                        child: SettingsEntry(
-                          text: Text("Изменить цвет иконок", style: TextStyle(color: Colors.white, fontSize: screenHeight * 0.0175),),
-                          icon: Icon(Icons.arrow_forward_ios, color: Colors.white, size: screenHeight * 0.025,),
-                          onTap: () {
-                            showDialog(
-                                context: context,
-                                builder: (BuildContext context) => ColorPickerAlertDialog(
-                                    title: Text("Изменить цвет иконок"),
-                                    object: "icon",
-                                    context: context
-                                )
-                            );
-                          },
-                        ),
-                      ),
-
-                      SizedBox(
-                        height: screenHeight * 0.075,
-                        child: SettingsEntry(
-                          text: Text("Изменить цвет текста", style: TextStyle(color: Colors.white, fontSize: screenHeight * 0.0175),),
-                          icon: Icon(Icons.arrow_forward_ios, color: Colors.white, size: screenHeight * 0.025,),
-                          onTap: () {
-                            showDialog(
-                                context: context,
-                                builder: (BuildContext context) => ColorPickerAlertDialog(
-                                    title: Text("Изменить цвет текста"),
-                                    object: "text",
-                                    context: context
-                                )
-                            );
-                          },
-                        ),
-                      ),
-
                     ]
                 ),
 

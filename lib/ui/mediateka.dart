@@ -282,11 +282,12 @@ class _MediatekaState extends State<Mediateka> {
 
                           provider.isInteractingWithInput ? IconButton(
                               onPressed: () {
-                                provider.setCurrentPlaylist(provider.currentPlaylist);
                                 searchController.text = "";
                                 FocusManager.instance.primaryFocus?.unfocus();
-                                provider.isSearchMode = false;
                                 provider.setIsInteractingWithInput(false);
+                                setState(() {
+                                  provider.isSearchMode = false;
+                                });
                               },
                               icon: Icon(Icons.close, color: iconColor,),
                           ) : SizedBox.shrink(),
@@ -295,11 +296,11 @@ class _MediatekaState extends State<Mediateka> {
                             SizedBox.shrink()
                             : IconButton(
                             onPressed: (){
-                              if (provider.player.shuffleModeEnabled) {
-                                provider.switchShuffle(false);
+                              if (provider.shuffleMode) {
+                                provider.setShuffle(false);
                                 showNotification("Рандомное воспроизведение выключено");
                               } else {
-                                provider.switchShuffle(true);
+                                provider.setShuffle(true);
                                 showNotification("Включено рандомное воспроизведение");
                               }
                             },
@@ -307,7 +308,7 @@ class _MediatekaState extends State<Mediateka> {
                               padding: EdgeInsets.all(4.0),
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                border: Border.all(color: iconColor!, style: provider.player.shuffleModeEnabled ? BorderStyle.solid : BorderStyle.none)
+                                border: Border.all(color: iconColor!, style: provider.shuffleMode ? BorderStyle.solid : BorderStyle.none)
                               ),
                               child: Icon(Icons.shuffle, color: iconColor,
                               )
@@ -365,13 +366,33 @@ class _MediatekaState extends State<Mediateka> {
                 ),
               ),
 
-              Expanded(
+              provider.isSearchMode
+              ? Expanded(
+              child: ListView.separated(
+                itemCount: provider.indexesOfSearchedAudios.length,
+                itemBuilder: (BuildContext context, int index) {
+                  return SearchTile(
+                    globalIndex: provider.indexesOfSearchedAudios[index],
+                    context: context,
+                    iconColor: iconColor!,
+                    textColor: textColor,
+                  );
+                  }, separatorBuilder: (BuildContext context, int index) {
+                    return Padding(padding: EdgeInsetsGeometry.symmetric(vertical: 0.005 * screenHeight));
+                  },
+                ),
+              )
+              : Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  //image: DecorationImage(image: Image.file(file))
+                ),
                 child: ListView.separated(
                   itemCount: isUserMakingPlaylist ? provider.audioFiles.length : provider.audioSources.length,
                   itemBuilder: (BuildContext context, int index) {
-                    List<int> playlistIdsList = provider.playlists[provider.currentPlaylist]!.toList();
+                    List<int> playlistIdsList = (provider.playlists[provider.currentPlaylist] ?? provider.favoriteAudios).toList();
                     return MediatekaListTile(
-                      index: index,
+                      globalIndex: playlistIdsList[index],
                       context: context,
                       iconColor: iconColor!,
                       textColor: textColor,
@@ -379,9 +400,10 @@ class _MediatekaState extends State<Mediateka> {
                     );
                   }, separatorBuilder: (BuildContext context, int index) {
                     return Padding(padding: EdgeInsetsGeometry.symmetric(vertical: 0.005 * screenHeight));
-                },
+                  },
                 ),
               ),
+            ),
 
               isUserMakingPlaylist ? Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -475,17 +497,17 @@ class _MediatekaState extends State<Mediateka> {
                       ),
 
                       IconButton(
-                          onPressed: () {
-                            provider.playNext();
-                          },
-                          icon: Icon(Icons.skip_next, color: iconColor, size: screenHeight * 0.04)
-                      ),
-                    ],
-                  ),
+                        onPressed: () {
+                          provider.playNext();
+                        },
+                        icon: Icon(Icons.skip_next, color: iconColor, size: screenHeight * 0.04)
+                    ),
+                  ],
                 ),
-              ) : SizedBox.shrink(),
-            ],
-          )
+              ),
+            ) : SizedBox.shrink(),
+          ],
+        )
       ),
     );
   }
