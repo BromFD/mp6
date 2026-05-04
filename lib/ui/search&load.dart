@@ -36,9 +36,9 @@ class _SearchAndLoadState extends State<SearchAndLoad> {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     final provider = context.watch<PlayerProvider>();
-    final backgroundColor = provider.colorScheme["background"];
-    final iconColor = provider.colorScheme["icon"];
-    final textColor = provider.colorScheme["text"];
+    final backgroundColor = provider.themeData["onlineSearch"]!["background"];
+    final iconColor = provider.themeData["onlineSearch"]!["icon"];
+    final textColor = provider.themeData["onlineSearch"]!["text"];
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -55,17 +55,27 @@ class _SearchAndLoadState extends State<SearchAndLoad> {
           icon: Icon(Icons.arrow_back),
         ),
       ),
-      body: SafeArea(
-          child: Center(
-            child: Column(
-              children: [
+      body: Container(
+        decoration: BoxDecoration(
+            image: provider.themeData["onlineSearch"]?["backgroundImage"] == null ? null :
+            DecorationImage(
+                fit: BoxFit.cover,
+                image: FileImage(provider.themeData["onlineSearch"]!["backgroundImage"],
+                )
+            )
+        ),
+        child: Center(
+          child: Column(
+            children: [
 
-                SizedBox(
-                  width: screenWidth * 0.8,
-                  child: Row(
-                    children: [
+              SizedBox(
+                width: screenWidth * 0.8,
+                child: Row(
+                  children: [
 
-                      Expanded(
+                    Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(bottom: screenHeight * 0.005),
                         child: TextField(
                           controller: titleController,
                           style: TextStyle(color: textColor),
@@ -81,24 +91,25 @@ class _SearchAndLoadState extends State<SearchAndLoad> {
                           ),
                         ),
                       ),
+                    ),
 
-                      IconButton(
-                          onPressed: () async {
-                            await provider.searchAudioFiles(titleController.text);
-                            titleController.clear();
-                          },
-                          icon: Icon(Icons.search, color: iconColor,)
-                      )
-                    ],
-                  ),
+                    IconButton(
+                        onPressed: () async {
+                          await provider.searchAudioFiles(titleController.text);
+                          titleController.clear();
+                        },
+                        icon: Icon(Icons.search, color: iconColor,)
+                    )
+                  ],
                 ),
+              ),
 
-                Padding(padding: EdgeInsets.symmetric(vertical: screenHeight * 0.025)),
+              Padding(padding: EdgeInsets.symmetric(vertical: screenHeight * 0.015)),
 
-                Expanded(
-                  child: SizedBox(
-                    width: screenWidth * 0.8,
-                    child: ListView.builder(
+              Expanded(
+                child: SizedBox(
+                  width: screenWidth * 0.8,
+                  child: ListView.builder(
                       itemCount: provider.foundAudioFiles.length,
                       itemBuilder: (BuildContext context, int index) {
                         return YTSearchTile(
@@ -108,13 +119,12 @@ class _SearchAndLoadState extends State<SearchAndLoad> {
                           textColor: textColor,
                         );
                       }
-                    ),
                   ),
                 ),
-
-              ],
-            ),
-          )
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

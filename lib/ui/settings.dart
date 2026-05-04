@@ -62,7 +62,8 @@ class _SettingsState extends State<Settings> {
                                   context: context,
                                   builder: (context) {
                                     return AlertDialog(
-                                      title: Text("Выберите тему приложения"),
+                                      backgroundColor: provider.themeData["alert"]!["background"],
+                                      title: Text("Выберите тему приложения", style: TextStyle(color: provider.themeData["alert"]!["text"],),),
                                       actions: [
 
                                         Align(
@@ -75,7 +76,7 @@ class _SettingsState extends State<Settings> {
                                                     provider.setTheme("dark");
                                                     Navigator.pop(context);
                                                   },
-                                                  child: Text("Тёмная", style: TextStyle(color: Colors.black, fontSize: screenHeight * 0.02),)
+                                                  child: Text("Тёмная", style: TextStyle(color: provider.themeData["alert"]!["text"], fontSize: screenHeight * 0.02),)
                                               ),
 
                                               TextButton(
@@ -83,7 +84,7 @@ class _SettingsState extends State<Settings> {
                                                     provider.setTheme("light");
                                                     Navigator.pop(context);
                                                   },
-                                                  child: Text("Светлая", style: TextStyle(color: Colors.black, fontSize: screenHeight * 0.02),)
+                                                  child: Text("Светлая", style: TextStyle(color: provider.themeData["alert"]!["text"], fontSize: screenHeight * 0.02),)
                                               ),
 
                                               TextButton(
@@ -91,7 +92,7 @@ class _SettingsState extends State<Settings> {
                                                     provider.setTheme("blueSky");
                                                     Navigator.pop(context);
                                                   },
-                                                  child: Text("Небесная", style: TextStyle(color: Colors.black, fontSize: screenHeight * 0.02),)
+                                                  child: Text("Небесная", style: TextStyle(color: provider.themeData["alert"]!["text"], fontSize: screenHeight * 0.02),)
                                               )
 
                                             ],

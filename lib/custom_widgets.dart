@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
@@ -5,7 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:chuni_player_revamped/provider/provider.dart';
 import 'package:marquee/marquee.dart';
 import 'package:chuni_player_revamped/log/logger.dart';
-
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -117,75 +118,6 @@ class SettingSector extends StatelessWidget {
   }
 }
 
-// Этот виджет - всплывающее окно, вызывается когда пользователь нажимает на пункты настроек с выбором цвета
-class ThemeCreationAlertDialog extends StatefulWidget {
-  final BuildContext context;
-  const ThemeCreationAlertDialog({
-    super.key,
-    required this.context,
-  });
-
-  @override
-  State<ThemeCreationAlertDialog> createState() => _ThemeCreationAlertDialogState();
-}
-
-class _ThemeCreationAlertDialogState extends State<ThemeCreationAlertDialog> {
-  @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    double screenWidth = MediaQuery.of(widget.context).size.width;
-    double screenHeight = MediaQuery.of(widget.context).size.height;
-    final provider = widget.context.watch<PlayerProvider>();
-    return Dialog(
-      insetPadding: EdgeInsets.all(10),
-      child: SizedBox(
-          height: screenHeight * 0.8,
-          width: screenWidth * 0.8,
-          child: ListView(
-            children: [
-              Padding(
-                padding: EdgeInsets.only(top: screenHeight * 0.035, bottom: screenHeight * 0.05, left: screenWidth * 0.075, right: screenWidth * 0.075),
-                child: Text("Тут можно изменить цвет фона, фоновое изображение, цвет текста и цвет иконок для каждого отдельного раздела приложения", style: TextStyle(fontSize: screenHeight * 0.0225,),),
-              ),
-              for (String segment in ["Медиатека", "Боковые меню", "Плейлисты", "Поиск песни", "Эквалайзер", "Избранное", "Всплывающие окна"]) ...[
-
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Center(child: Text(segment, style: TextStyle(fontSize: screenHeight * 0.03),)),
-                ),
-                
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    for (IconData element in [Icons.format_paint, Icons.wallpaper, Icons.text_format, Icons.music_note]) ...[
-                      Container(
-                        width: screenWidth*0.175,
-                        height: screenWidth*0.175,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all()
-                        ),
-                        child: InkWell(
-                          child: Icon(element),
-                        ),
-                      )
-                    ]
-                  ],
-                ),
-                
-                Padding(padding: EdgeInsets.only(bottom: screenHeight * 0.05),)
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // Этот виджет, визуализация каждого отдельного трека в медиатеке
 class MediatekaListTile extends StatefulWidget {
   final int globalIndex;
@@ -258,7 +190,8 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
                               context: context,
                               builder: (context) {
                                 return AlertDialog(
-                                  title: Text("Настройки аудио"),
+                                  backgroundColor: provider.themeData["alert"]!["background"],
+                                  title: Text("Настройки аудио", style: TextStyle(color: provider.themeData["alert"]!["text"],),),
                                   actions: [
 
                                     Column(
@@ -269,7 +202,7 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
                                               provider.switchAddToExistingPlaylistFlag();
                                               Navigator.pushNamed(context, "/playlist");
                                             },
-                                            child: Text("Добавить аудио в плейлист", style: TextStyle(color: Colors.black),)
+                                            child: Text("Добавить аудио в плейлист", style: TextStyle(color: provider.themeData["alert"]!["text"],),)
                                         ),
 
                                         provider.currentPlaylist != "main" ? TextButton(
@@ -277,7 +210,7 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
                                               await provider.removeFromExistingPlaylist(widget.globalIndex);
                                               Navigator.pop(context);
                                             },
-                                            child: Text("Удалить аудио из плейлиста", style: TextStyle(color: Colors.black),)
+                                            child: Text("Удалить аудио из плейлиста", style: TextStyle(color: provider.themeData["alert"]!["text"],),)
                                         ) : SizedBox.shrink(),
                                       ],
                                     ),
@@ -315,6 +248,7 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
   }
 }
 
+// Визуализация найденного трека
 class SearchTile extends StatefulWidget {
   final int globalIndex;
   final BuildContext context;
@@ -384,7 +318,8 @@ class _SearchTileState extends State<SearchTile> {
                                 context: context,
                                 builder: (context) {
                                   return AlertDialog(
-                                    title: Text("Настройки аудио"),
+                                    backgroundColor: provider.themeData["alert"]!["background"],
+                                    title: Text("Настройки аудио", style: TextStyle(color: provider.themeData["alert"]!["text"],),),
                                     actions: [
 
                                       Column(
@@ -395,7 +330,7 @@ class _SearchTileState extends State<SearchTile> {
                                                 provider.switchAddToExistingPlaylistFlag();
                                                 Navigator.pushNamed(context, "/playlist");
                                               },
-                                              child: Text("Добавить аудио в плейлист", style: TextStyle(color: Colors.black),)
+                                              child: Text("Добавить аудио в плейлист", style: TextStyle(color: provider.themeData["alert"]!["text"],),)
                                           ),
 
                                           provider.currentPlaylist != "main" ? TextButton(
@@ -403,7 +338,7 @@ class _SearchTileState extends State<SearchTile> {
                                                 await provider.removeFromExistingPlaylist(widget.globalIndex);
                                                 Navigator.pop(context);
                                               },
-                                              child: Text("Удалить аудио из плейлиста", style: TextStyle(color: Colors.black),)
+                                              child: Text("Удалить аудио из плейлиста", style: TextStyle(color: provider.themeData["alert"]!["text"],),)
                                           ) : SizedBox.shrink(),
                                         ],
                                       ),
@@ -436,16 +371,10 @@ class _SearchTileState extends State<SearchTile> {
 
 // Виджет представляющий собой мини плеер, будет всплывать снизу экрана
 class MiniPlayer extends StatefulWidget {
-  final Color backgroundColor;
-  final Color iconColor;
-  final Color textColor;
   final BuildContext context;
   const MiniPlayer({
     super.key,
-    required this.backgroundColor,
-    required this.iconColor,
     required this.context,
-    required this.textColor,
   });
 
   @override
@@ -460,9 +389,20 @@ class _MiniPlayerState extends State<MiniPlayer> {
     final provider = context.watch<PlayerProvider>();
     final bool isPlaying = provider.player.playing;
     final bool inFavorites = provider.favoriteAudios.contains(provider.currentId);
+    final backgroundColor = provider.themeData["mini"]!["background"];
+    final iconColor = provider.themeData["mini"]!["icon"];
+    final textColor = provider.themeData["mini"]!["text"];
 
     return Container(
-      color: widget.backgroundColor,
+      color: provider.themeData["mini"]?["backgroundImage"] == null ? backgroundColor : null,
+      decoration: provider.themeData["mini"]?["backgroundImage"] == null ? null
+          : BoxDecoration(
+          image: DecorationImage(
+              fit: BoxFit.cover,
+              image: FileImage(provider.themeData["mini"]!["backgroundImage"],
+              )
+          )
+      ),
       height: screenHeight,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -476,7 +416,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
             width: screenWidth * 0.8,
             child: Marquee(
               text: provider.currentAudioFile!["name"],
-              style: TextStyle(color: widget.textColor, fontSize: screenHeight * 0.035,),
+              style: TextStyle(color: textColor, fontSize: screenHeight * 0.035,),
               scrollAxis: Axis.horizontal,
               crossAxisAlignment: CrossAxisAlignment.center,
               blankSpace: screenWidth * 0.8,
@@ -498,24 +438,25 @@ class _MiniPlayerState extends State<MiniPlayer> {
               height: screenHeight * 0.5,
               child: FittedBox(
                   fit: BoxFit.fitWidth,
-                  child: Icon(Icons.music_note, color: widget.iconColor)
+                  child: Icon(Icons.music_note, color: iconColor)
             )
           ),
           onTap: () {
             showDialog(
-                context: context, 
+                context: context,
                 builder: (BuildContext context) => AlertDialog(
-                  title: Center(child: Text("Настройки трека")),
+                  backgroundColor: provider.themeData["alert"]!["background"],
+                  title: Center(child: Text("Настройки трека", style: TextStyle(color: provider.themeData["alert"]!["text"],),)),
                   actions: [
                     SizedBox(
                       width: screenWidth * 0.8,
                       height: screenHeight * 0.1,
                       child: SettingsEntry(
-                          text: Text("Добавить или изменить\n изображение у трека", style: TextStyle(fontSize: 18),),
+                          text: Text("Добавить или изменить\n изображение у трека", style: TextStyle(fontSize: 18, color: provider.themeData["alert"]!["text"],),),
                           onTap: () async {
                             await provider.setAudioPicture();
                           },
-                          icon: Icon(Icons.arrow_forward_ios)
+                          icon: Icon(Icons.arrow_forward_ios, color: provider.themeData["alert"]!["icon"],)
                       ),
                     )
                   ],
@@ -530,14 +471,14 @@ class _MiniPlayerState extends State<MiniPlayer> {
               padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.1),
               child: MiniPlayerSlider(
                 context: context,
-                iconColor: widget.iconColor,
-                textColor: widget.textColor,
+                iconColor: iconColor,
+                textColor: textColor,
               ),
             ),
           ),
 
           SizedBox(
-            height: screenHeight * 0.1,
+            height: screenHeight * 0.075,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -547,16 +488,24 @@ class _MiniPlayerState extends State<MiniPlayer> {
                       provider.player.loopMode == LoopMode.off ? provider.setLoopMode(LoopMode.one) : provider.setLoopMode(LoopMode.off);
                       showNotification(provider.player.loopMode == LoopMode.one ? 'Включён режим повтора' : "Режим повтора выключен");
                     },
-                    icon: Icon(Icons.loop, color: widget.iconColor, size: screenHeight * 0.04)
+                    icon: Container(
+                        padding: EdgeInsets.all(4.0),
+                        decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: iconColor!, style: provider.player.loopMode == LoopMode.one ? BorderStyle.solid : BorderStyle.none)
+                        ),
+                        child: Icon(Icons.repeat_one, color: iconColor, size: screenHeight * 0.04,
+                        )
+                    )
                 ),
 
                 IconButton(
                     onPressed: () {
                       provider.playPrevious();
                     },
-                    icon: Icon(Icons.skip_previous, color: widget.iconColor, size: screenHeight * 0.04)
+                    icon: Icon(Icons.skip_previous, color: iconColor, size: screenHeight * 0.04)
                 ),
-                
+
                 IconButton(
                     onPressed: () {
                       if (isPlaying) {
@@ -565,14 +514,14 @@ class _MiniPlayerState extends State<MiniPlayer> {
                         provider.play();
                       }
                     },
-                    icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow, color: widget.iconColor, size: screenHeight * 0.04)
+                    icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow, color: iconColor, size: screenHeight * 0.04)
                 ),
-                
+
                 IconButton(
                     onPressed: () {
                       provider.playNext();
                     },
-                    icon: Icon(Icons.skip_next, color: widget.iconColor, size: screenHeight * 0.04)
+                    icon: Icon(Icons.skip_next, color: iconColor, size: screenHeight * 0.04)
                 ),
 
                 IconButton(
@@ -583,13 +532,60 @@ class _MiniPlayerState extends State<MiniPlayer> {
                         provider.addToFavorites(provider.currentId!);
                       }
                     },
-                    icon: Icon(inFavorites ? Icons.favorite : Icons.favorite_border_outlined, color: widget.iconColor, size: screenHeight * 0.04)
+                    icon: Icon(inFavorites ? Icons.favorite : Icons.favorite_border_outlined, color: iconColor, size: screenHeight * 0.04)
                 ),
 
               ],
             ),
           ),
-          Padding(padding: EdgeInsets.only(bottom: screenWidth * 0.2))
+
+          SizedBox(
+            height: screenHeight * 0.075,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+
+                IconButton(
+                    onPressed: () {
+                      provider.setLoopMode(provider.player.loopMode == LoopMode.all ? LoopMode.off : LoopMode.all);
+                      showNotification(provider.player.loopMode == LoopMode.all ? "Включён цикличный режим воспроизведения" : "Цикличный режим воспроизведения выключен");
+                    },
+                    icon: Container(
+                        padding: EdgeInsets.all(4.0),
+                        decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: iconColor!, style: provider.player.loopMode == LoopMode.all ? BorderStyle.solid : BorderStyle.none)
+                        ),
+                        child: Icon(Icons.loop, color: iconColor, size: screenHeight * 0.04,
+                        )
+                    )
+                ),
+
+                IconButton(
+                    onPressed: (){
+                      if (provider.shuffleMode) {
+                        provider.setShuffle(false);
+                        showNotification("Рандомное воспроизведение выключено");
+                      } else {
+                        provider.setShuffle(true);
+                        showNotification("Включено рандомное воспроизведение");
+                      }
+                    },
+                    icon: Container(
+                        padding: EdgeInsets.all(4.0),
+                        decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: iconColor!, style: provider.shuffleMode ? BorderStyle.solid : BorderStyle.none)
+                        ),
+                        child: Icon(Icons.shuffle, color: iconColor, size: screenHeight * 0.04,
+                        )
+                    )
+                ),
+
+              ],
+            ),
+          ),
+          Padding(padding: EdgeInsets.only(bottom: screenWidth * 0.15))
         ],
       ),
     );
@@ -666,60 +662,6 @@ class _MiniPlayerSliderState extends State<MiniPlayerSlider> {
   }
 }
 
-// Окно высплывающее при создании плейлиста
-class PlaylistCreationAlertDialog extends StatefulWidget {
-  final BuildContext context;
-  const PlaylistCreationAlertDialog({
-    super.key,
-    required this.context,
-  });
-
-  @override
-  State<PlaylistCreationAlertDialog> createState() => _PlaylistCreationAlertDialogState();
-}
-
-class _PlaylistCreationAlertDialogState extends State<PlaylistCreationAlertDialog> {
-  late final TextEditingController nameController;
-
-  @override
-  void initState() {
-    // TODO: implement initState
-    super.initState();
-    nameController = TextEditingController();
-  }
-  @override
-  Widget build(BuildContext context) {
-    double screenWidth = MediaQuery.of(widget.context).size.width;
-    double screenHeight = MediaQuery.of(widget.context).size.width;
-    final provider = widget.context.watch<PlayerProvider>();
-    return AlertDialog(
-      title: Text("Создать новый плейлист"),
-      backgroundColor: Colors.white,
-      actions: <Widget>[
-        SizedBox(
-          width: screenWidth * 0.5,
-          child: TextField(
-            controller: nameController,
-            decoration: InputDecoration(
-              labelText: 'Введите название вашего плейлиста',
-            ),
-          ),
-        ),
-        IconButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await provider.switchPlaylistCreationFlag();
-              provider.createPlaylist(nameController.text);
-              nameController.clear();
-              Navigator.pushNamed(context, "/");
-            },
-            icon: Icon(Icons.check)
-        ),
-      ],
-    );
-  }
-}
-
 // Виджет отображающий созданный плейлист
 class PlaylistTile extends StatefulWidget {
   final BuildContext context;
@@ -764,7 +706,8 @@ class _PlaylistTileState extends State<PlaylistTile> {
                 context: context,
                 builder: (context) {
                   return AlertDialog(
-                    title: Center(child: Text("Настройки плейлиста")),
+                    backgroundColor: provider.themeData["alert"]!["background"],
+                    title: Center(child: Text("Настройки плейлиста", style: TextStyle(color: provider.themeData["alert"]!["text"],),)),
                     actionsAlignment: MainAxisAlignment.start,
                     actions: [
 
@@ -778,7 +721,8 @@ class _PlaylistTileState extends State<PlaylistTile> {
                                 showDialog(context: context,
                                     builder: (context){
                                       return AlertDialog(
-                                        title: Center(child: Text("Вы действительно хотите удалить плейлист $name?")),
+                                        backgroundColor: provider.themeData["alert"]!["background"],
+                                        title: Center(child: Text("Вы действительно хотите удалить плейлист $name?", style: TextStyle(color: provider.themeData["alert"]!["text"],),)),
                                         actions: [
 
                                           TextButton(
@@ -786,13 +730,13 @@ class _PlaylistTileState extends State<PlaylistTile> {
                                                 provider.deletePlaylist(name);
                                                 Navigator.pop(context);
                                               },
-                                              child: Text("Да", style: TextStyle(color: Colors.black),)),
+                                              child: Text("Да", style: TextStyle(color: provider.themeData["alert"]!["text"],),)),
 
                                           TextButton(
                                               onPressed: () {
                                                 Navigator.pop(context);
                                               },
-                                              child: Text("Нет", style: TextStyle(color: Colors.black),))
+                                              child: Text("Нет", style: TextStyle(color: provider.themeData["alert"]!["text"],),))
 
                                         ],
                                       );
@@ -800,7 +744,7 @@ class _PlaylistTileState extends State<PlaylistTile> {
                                 );
 
                               },
-                            child: Text("Удалить плейлист", style: TextStyle(color: Colors.black),)
+                            child: Text("Удалить плейлист", style: TextStyle(color: provider.themeData["alert"]!["text"],),)
                           ),
 
                           TextButton(
@@ -808,9 +752,10 @@ class _PlaylistTileState extends State<PlaylistTile> {
 
                                 Navigator.pop(context);
                                 showDialog(context: context,
-                                    builder: (context){
+                                    builder: (context) {
                                       return AlertDialog(
-                                        title: Center(child: Text("Переименуйте ваш плейлист $name")),
+                                        backgroundColor: provider.themeData["alert"]!["background"],
+                                        title: Center(child: Text("Переименуйте ваш плейлист $name", style: TextStyle(color: provider.themeData["alert"]!["text"],),)),
                                         actions: [
 
                                           Column(
@@ -822,7 +767,15 @@ class _PlaylistTileState extends State<PlaylistTile> {
                                                   controller: nameController,
                                                   decoration: InputDecoration(
                                                     labelText: 'Введите имя плейлиста',
+                                                    border: UnderlineInputBorder(
+                                                      borderSide: BorderSide(color: provider.themeData["alert"]!["text"]),
+                                                    ),
+                                                    focusedBorder: UnderlineInputBorder(
+                                                      borderSide: BorderSide(color: provider.themeData["alert"]!["text"]),
+                                                    ),
                                                   ),
+                                                  style: TextStyle(color: provider.themeData["alert"]!["text"]),
+                                                  cursorColor: provider.themeData["alert"]!["text"],
                                                 ),
                                               ),
 
@@ -836,13 +789,14 @@ class _PlaylistTileState extends State<PlaylistTile> {
                                                         nameController.clear();
                                                         Navigator.pop(context);
                                                       },
-                                                      child: Text("Подтвердить", style: TextStyle(color: Colors.black),)),
+                                                      child: Text("Подтвердить", style: TextStyle(color: provider.themeData["alert"]!["text"],),)),
 
                                                   TextButton(
                                                       onPressed: () {
                                                         Navigator.pop(context);
+                                                        nameController.clear();
                                                       },
-                                                      child: Text("Отмена", style: TextStyle(color: Colors.black),)),
+                                                      child: Text("Отмена", style: TextStyle(color: provider.themeData["alert"]!["text"],),)),
 
                                                 ],
                                               ),
@@ -855,7 +809,7 @@ class _PlaylistTileState extends State<PlaylistTile> {
                                     }
                                 );
                               },
-                              child: Text("Переименовать плейлист", style: TextStyle(color: Colors.black),)
+                              child: Text("Переименовать плейлист", style: TextStyle(color: provider.themeData["alert"]!["text"]),)
                           ),
                         ],
                       ),
@@ -1172,6 +1126,249 @@ class DrawerListTile extends StatelessWidget {
       ),
       title: child,
       onTap: action,
+    );
+  }
+}
+
+// ВСЁ АЛЕРТ ДИАЛОГИ
+
+// Этот виджет - всплывающее окно, вызывается когда пользователь нажимает на пункты настроек с выбором цвета
+class ThemeCreationAlertDialog extends StatefulWidget {
+  final BuildContext context;
+  const ThemeCreationAlertDialog({
+    super.key,
+    required this.context,
+  });
+
+  @override
+  State<ThemeCreationAlertDialog> createState() => _ThemeCreationAlertDialogState();
+}
+
+class _ThemeCreationAlertDialogState extends State<ThemeCreationAlertDialog> {
+  Color pickerColor = Color(0xFF000000);
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  void changeColor(Color color) {
+    setState(() => pickerColor = color);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    double screenWidth = MediaQuery.of(widget.context).size.width;
+    double screenHeight = MediaQuery.of(widget.context).size.height;
+    final provider = widget.context.watch<PlayerProvider>();
+    final segmentMap = {
+      "Медиатека": "mediateka",
+      "Боковые меню" : "drawer",
+      "Плейлисты" : "playlist",
+      "Поиск песни" : "onlineSearch",
+      "Эквалайзер" : "equalizer",
+      "Всплывающие окна" : "alert",
+      "Мини плеер" : "mini",
+    };
+    final elementMap = {
+      Icons.format_paint : "background",
+      Icons.wallpaper : "backgroundImage",
+      Icons.text_format : "text",
+      Icons.music_note : "icon",
+    };
+    appLog.i(provider.themeDataRaw);
+    return Dialog(
+      backgroundColor: provider.themeData["alert"]!["background"],
+      insetPadding: EdgeInsets.all(10),
+      child: SizedBox(
+        height: screenHeight * 0.8,
+        width: screenWidth * 0.8,
+        child: ListView(
+          children: [
+            Padding(
+              padding: EdgeInsets.only(top: screenHeight * 0.035, bottom: screenHeight * 0.05, left: screenWidth * 0.075, right: screenWidth * 0.075),
+              child: Text("Тут можно изменить цвет фона, фоновое изображение, цвет текста и цвет иконок для каждого отдельного раздела приложения", style: TextStyle(fontSize: screenHeight * 0.0225, color: provider.themeData["alert"]!["text"],),),
+            ),
+            for (String segment in ["Медиатека", "Боковые меню", "Плейлисты", "Поиск песни", "Эквалайзер", "Мини плеер", "Всплывающие окна"]) ...[
+
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Center(child: Text(segment, style: TextStyle(fontSize: screenHeight * 0.03, color: provider.themeData["alert"]!["text"],),)),
+              ),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  for (IconData element in [Icons.format_paint, Icons.wallpaper, Icons.text_format, Icons.music_note]) ...[
+                    if (!((segmentMap[segment] == "alert" || segmentMap[segment] == "drawer")  && elementMap[element] == "backgroundImage"))
+                      Container(
+                        width: screenWidth * 0.175,
+                        height: screenWidth * 0.175,
+                        decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              width: 3,
+                              color: elementMap[element] == "backgroundImage" ? provider.themeData["alert"]!["background"].computeLuminance() > 0.5 ? Colors.black : Colors.white : provider.themeData[segmentMap[segment]]![elementMap[element]],
+                            )
+                        ),
+                        child: InkWell(
+                          child: Icon(element, color: provider.themeData["alert"]!["background"].computeLuminance() > 0.5 ? Colors.black : Colors.white),
+                          onTap: () async {
+                            if (elementMap[element] == "backgroundImage") {
+                              showDialog(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    backgroundColor: provider.themeData["alert"]!["background"],
+                                    title: Text("Изменение заднего фона", style: TextStyle(color: provider.themeData["alert"]!["text"]),),
+                                    actions: [
+
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+
+                                          TextButton(
+                                            onPressed: () async {
+                                              await provider.changeThemeData(null, segmentMap[segment]!, elementMap[element]!);
+                                              Navigator.pop(context);
+                                            },
+                                            child: Text("Убрать", style: TextStyle(color: provider.themeData["alert"]!["text"]),),
+                                          ),
+
+                                          TextButton(
+                                            onPressed: () async {
+                                              FilePickerResult? backgroundImage = await FilePicker.platform.pickFiles(
+                                                type: FileType.image,
+                                              );
+                                              if (backgroundImage != null) {
+                                                await provider.changeThemeData(backgroundImage.files.first.path, segmentMap[segment]!, elementMap[element]!);
+                                              }
+                                              Navigator.pop(context);
+                                            },
+                                            child: Text("Поставить", style: TextStyle(color: provider.themeData["alert"]!["text"]),),
+                                          )
+
+                                        ],
+                                      )
+
+                                    ],
+                                  )
+                              );
+                            } else {
+                              showDialog(
+                                  context: context,
+                                  builder: (context) => Dialog(
+                                    backgroundColor: provider.themeData["alert"]!["background"],
+                                    child: SizedBox(
+                                      height: screenHeight * 0.8,
+                                      width: screenWidth * 0.8,
+                                      child: Column(
+                                        children: [
+                                          Padding(
+                                            padding: const EdgeInsets.all(20),
+                                            child: Center(child: Text("Выберите цвет", style: TextStyle(color: provider.themeData["alert"]!["text"], fontSize: screenHeight * 0.03),),),
+                                          ),
+                                          Expanded(
+                                            child: SizedBox(
+                                              width: screenWidth * 0.8,
+                                              height: screenHeight * 0.8,
+                                              child: SingleChildScrollView(
+                                                child: ColorPicker(
+                                                  pickerColor: pickerColor,
+                                                  onColorChanged: changeColor,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+
+                                          ElevatedButton(
+                                            child: Text('Подтвердить', style: TextStyle(color: provider.themeData["alert"]!["text"],),),
+                                            onPressed: () async {
+                                              final hexCode = '0x${pickerColor.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}';
+                                              await provider.changeThemeData(int.parse(hexCode), segmentMap[segment]!, elementMap[element]!);
+                                              Navigator.of(context).pop();
+                                            },
+                                          ),
+
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                            );
+                          }
+                        },
+                      ),
+                    )
+                  ]
+                ],
+              ),
+
+              Padding(padding: EdgeInsets.only(bottom: screenHeight * 0.05),)
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Окно высплывающее при создании плейлиста
+class PlaylistCreationAlertDialog extends StatefulWidget {
+  final BuildContext context;
+  const PlaylistCreationAlertDialog({
+    super.key,
+    required this.context,
+  });
+
+  @override
+  State<PlaylistCreationAlertDialog> createState() => _PlaylistCreationAlertDialogState();
+}
+
+class _PlaylistCreationAlertDialogState extends State<PlaylistCreationAlertDialog> {
+  late final TextEditingController nameController;
+
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    nameController = TextEditingController();
+  }
+  @override
+  Widget build(BuildContext context) {
+    double screenWidth = MediaQuery.of(widget.context).size.width;
+    double screenHeight = MediaQuery.of(widget.context).size.width;
+    final provider = widget.context.watch<PlayerProvider>();
+    return AlertDialog(
+      title: Text("Создать новый плейлист", style: TextStyle(color: provider.themeData["alert"]!["text"],),),
+      backgroundColor: provider.themeData["alert"]!["background"],
+      actions: <Widget>[
+        SizedBox(
+          width: screenWidth * 0.5,
+          child: TextField(
+            controller: nameController,
+            style: TextStyle(color: provider.themeData["alert"]!["text"]),
+            cursorColor: provider.themeData["alert"]!["text"],
+            decoration: InputDecoration(
+              labelText: 'Введите название вашего плейлиста',
+              border: UnderlineInputBorder(
+                borderSide: BorderSide(color: provider.themeData["alert"]!["text"]),
+              ),
+              focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: provider.themeData["alert"]!["text"]),
+                ),
+              ),
+            ),
+          ),
+        IconButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await provider.switchPlaylistCreationFlag();
+              provider.createPlaylist(nameController.text);
+              nameController.clear();
+              Navigator.pushNamed(context, "/");
+            },
+            icon: Icon(Icons.check, color: provider.themeData["alert"]!["icon"],)
+        ),
+      ],
     );
   }
 }

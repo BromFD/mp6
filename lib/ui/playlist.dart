@@ -12,9 +12,9 @@ class Playlist extends StatelessWidget {
     final screenHeight = MediaQuery.of(context).size.height;
     final provider = context.watch<PlayerProvider>();
     final isUserAddToExistingPlaylist = provider.isUserAddToExistingPlaylist;
-    final backgroundColor = provider.colorScheme["background"];
-    final iconColor = provider.colorScheme["icon"];
-    final textColor = provider.colorScheme["text"];
+    final backgroundColor = provider.themeData["playlist"]!["background"];
+    final iconColor = provider.themeData["playlist"]!["icon"];
+    final textColor = provider.themeData["playlist"]!["text"];
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -32,21 +32,31 @@ class Playlist extends StatelessWidget {
           icon: Icon(Icons.arrow_back),
         ),
       ),
-      body: SafeArea(
-        child: ListView.separated(
-            itemBuilder: (BuildContext context, int index) {
-              return PlaylistTile(
-                  textColor: textColor!,
-                  iconColor: iconColor!,
-                  context: context,
-                  index: index
-              );
+      body: Container(
+        decoration: BoxDecoration(
+            image: provider.themeData["playlist"]?["backgroundImage"] == null ? null :
+            DecorationImage(
+                fit: BoxFit.cover,
+                image: FileImage(provider.themeData["playlist"]!["backgroundImage"],
+                )
+            )
+        ),
+        child: SafeArea(
+          child: ListView.separated(
+              itemBuilder: (BuildContext context, int index) {
+                return PlaylistTile(
+                    textColor: textColor!,
+                    iconColor: iconColor!,
+                    context: context,
+                    index: index
+                );
+              },
+              itemCount: provider.playlists.isEmpty ? 0 : provider.playlists.length,
+            separatorBuilder: (BuildContext context, int index) {
+                return Padding(padding: EdgeInsetsGeometry.symmetric(vertical: 0.015 * screenHeight));
             },
-            itemCount: provider.playlists.isEmpty ? 0 : provider.playlists.length,
-          separatorBuilder: (BuildContext context, int index) {
-              return Padding(padding: EdgeInsetsGeometry.symmetric(vertical: 0.015 * screenHeight));
-          },
-        )
+          )
+        ),
       ),
       floatingActionButton: isUserAddToExistingPlaylist ? SizedBox.shrink() :
       FloatingActionButton.large(

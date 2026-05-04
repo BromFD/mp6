@@ -48,9 +48,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final backgroundColor = context.select<PlayerProvider, Color?>(
-            (p) => p.colorScheme["background"]
-    );
+    final backgroundColor = Colors.transparent;
     return MaterialApp(
         navigatorKey: navigatorKey,
         theme: ThemeData(

@@ -30,12 +30,14 @@ class PlayerProvider extends ChangeNotifier {
   List<AudioSource> audioSources = []; // Список текущих треков с которыми будет работать аудио плеер (UI тоже будет полагатся на него)
   List<AudioSource> currentAudioSources = []; // Аудио сурсы текущего прослушеваемого плейлиста
   Set<int> audioSourcesIds = {}; // Индексы audioSources которые будут добавлены в плейлист
-  Map<String, int> colorSchemeHexCodes = { // Hex коды цветовой схемы, нужны т.к Hive не хранит объекты типа Color
-    "background": 0xFF1E1E1E,
-    "icon": 0xFF9C27B0,
-    "text": 0xFFFFFFFF,
+  Map<String, Map<String, dynamic>> themeDataRaw = { // Сырые значения тем которые Hive может сохранить
+    for (String segment in ["mediateka", "drawer", "playlist", "onlineSearch", "equalizer", "alert", "mini"])
+      segment : {
+        for (int elementIndex = 0; elementIndex < 4; elementIndex++)
+          ["background", "text", "icon", "backgroundImage"][elementIndex] : [0xFF1E1E1E, 0xFFFFFFFF, 0xFF9C27B0, null][elementIndex]
+      }
   };
-  Map<String, Color> colorScheme = {};  // Отвечает за цветовую схему которую пользователь выбирает в настройках
+  Map<String, Map<String, dynamic>> themeData = {};  // Отвечает за тему которую пользователь может изменить в настройках
   final equalizer = AndroidEqualizer(); // Эквалайзер
   late final AndroidEqualizerParameters parameters; // Параметры эквалайзера
   late final List<AndroidEqualizerBand> bands; // Дорожки
@@ -103,7 +105,7 @@ class PlayerProvider extends ChangeNotifier {
     ); // Создаём плеер
     await scanAudioFiles();
     await loadAudioPictures();
-    colorScheme.isEmpty ? updateColors() : null;
+    themeData.isEmpty ? updateAllData() : null;
     await setStreams();
     await currentAudioUpdater();
     await initializeEqualizer();
@@ -583,52 +585,62 @@ Future<void> checkDisposedTracks() async {
   // Функции для изменения внешнего вида приложения
 
   //Изменение цветовой схемы приложения
-  Future<void> changeColorScheme(int hexCode, String object) async {
-    colorSchemeHexCodes[object] = hexCode;
-    addItemToBox(colorSchemeHexCodes, "colorScheme");
-    updateColor(hexCode, object);
+  Future<void> changeThemeData(dynamic data, String segment, String element) async {
+    themeDataRaw[segment]![element] = data;
+    addItemToBox(themeDataRaw, "themeData");
+    updateData(data, segment, element);
     notifyListeners();
   }
 
   // Обновление цвета
-  void updateColor(int hexCode, String object){
-    colorScheme[object] = Color(hexCode);
+  void updateData(dynamic data, String segment, String element){
+    appLog.i("$data, $segment, $element");
+    themeData[segment]![element] = data == null ? data : element == "backgroundImage" ? File(data) : Color(data);
     notifyListeners();
   }
 
   // Обновление всех цветов
-  void updateColors() {
-    colorScheme = {
-      for (var scheme in (colorSchemeHexCodes).entries)
-        scheme.key : Color(scheme.value)
+  void updateAllData() {
+    themeData = {
+      for (var segment in (themeDataRaw).entries)
+        segment.key : {
+          for (var element in segment.value.entries)
+            element.key : element.value == null ? null : element.value is String ? File(element.value) : Color(element.value)
+        }
     };
     notifyListeners();
   }
 
   void setTheme (String theme) {
     if (theme == "light") {
-      colorSchemeHexCodes = {
-        "background": 0xFFFFFFFF,
-        "icon": 0xFF1E1E1E,
-        "text": 0xFF1E1E1E,
+      themeDataRaw = {
+        for (String segment in ["mediateka", "drawer", "playlist", "onlineSearch", "equalizer", "alert", "mini"])
+          segment : {
+            for (int elementIndex = 0; elementIndex < 4; elementIndex++)
+              ["background", "text", "icon", "backgroundImage"][elementIndex] : [0xFFFFFFFF, 0xFF1E1E1E, 0xFF1E1E1E, null][elementIndex]
+        }
       };
     }
     else if (theme == "dark") {
-      colorSchemeHexCodes = {
-        "background": 0xFF1E1E1E,
-        "icon": 0xFFFFFFFF,
-        "text": 0xFFFFFFFF,
+      themeDataRaw = {
+        for (String segment in ["mediateka", "drawer", "playlist", "onlineSearch", "equalizer", "alert", "mini"])
+          segment : {
+            for (int elementIndex = 0; elementIndex < 4; elementIndex++)
+              ["background", "text", "icon", "backgroundImage"][elementIndex] : [0xFF1E1E1E, 0xFFFFFFFF, 0xFFFFFFFF, null][elementIndex]
+          }
       };
     }
     else if (theme == "blueSky") {
-      colorSchemeHexCodes = {
-        "background": 0xFF42AAFF,
-        "icon": 0xFFFFFFFF,
-        "text": 0xFFFFFFFF,
+      themeDataRaw = {
+        for (String segment in ["mediateka", "drawer", "playlist", "onlineSearch", "equalizer", "alert", "mini"])
+          segment : {
+            for (int elementIndex = 0; elementIndex < 4; elementIndex++)
+              ["background", "text", "icon", "backgroundImage"][elementIndex] : [0xFF42AAFF, 0xFFFFFFFF, 0xFFFFFFFF, null][elementIndex]
+          }
       };
     }
-    addItemToBox(colorSchemeHexCodes, "colorScheme");
-    updateColors();
+    addItemToBox(themeDataRaw, "themeData");
+    updateAllData();
   }
 
   Future<void> loadAudioPictures() async {
@@ -840,9 +852,9 @@ Future<void> checkDisposedTracks() async {
   Future<void> loadItemsFromBoxes() async {
     final playerData = Hive.box("playerData");
     final rawPlaylists = playerData.get("playlist", defaultValue: {});
-    final rawColorScheme = playerData.get("colorScheme", defaultValue: colorSchemeHexCodes);
+    final rawThemeData = playerData.get("themeData", defaultValue: themeDataRaw);
     playlists = convertRawToOriginal(rawPlaylists, "playlist");
-    colorSchemeHexCodes = convertRawToOriginal(rawColorScheme, "colorScheme");
+    themeDataRaw = convertRawToOriginal(rawThemeData, "themeData");
     audioFilesDirectory = Directory(playerData.get("audioFilesDirectory", defaultValue: audioFilesDirectory.path).toString());
     gainList = [for (var gain in playerData.get("gainList", defaultValue: [])) (gain as double)];
     ignoreInterruptions = playerData.get("ignoreInterruptions", defaultValue: false);
@@ -857,7 +869,7 @@ Future<void> checkDisposedTracks() async {
     audioPictures = {for (var pictureInfo in (playerData.get("audioPictures", defaultValue: {}) as Map).entries)
       pictureInfo.key as int : pictureInfo.value as String
     };
-    updateColors();
+    updateAllData();
     notifyListeners();
   }
 
@@ -870,10 +882,13 @@ Future<void> checkDisposedTracks() async {
       };
     }
 
-    if (object == "colorScheme") {
+    if (object == "themeData") {
       original = {
-        for (var scheme in (raw as Map).entries)
-          scheme.key.toString() : (scheme.value as int)
+        for (var segment in (raw as Map).entries)
+          (segment.key as String) : {
+            for (var element in (segment.value as Map).entries)
+              (element.key as String) : (element.value as dynamic)
+        }
       };
     }
     return original;
