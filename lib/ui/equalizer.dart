@@ -1,6 +1,6 @@
-import 'package:chuni_player_revamped/provider/provider.dart';
+import 'package:mp6/provider/provider.dart';
 import 'package:flutter/material.dart';
-import 'package:chuni_player_revamped/custom_widgets.dart';
+import 'package:mp6/custom_widgets.dart';
 import 'package:provider/provider.dart';
 
 class Equalizer extends StatefulWidget {
@@ -55,8 +55,7 @@ class _EqualizerState extends State<Equalizer> {
             image: provider.themeData["equalizer"]?["backgroundImage"] == null ? null :
             DecorationImage(
                 fit: BoxFit.cover,
-                image: FileImage(provider.themeData["equalizer"]!["backgroundImage"],
-                )
+                image: provider.themeData["equalizer"]!["backgroundImage"],
             )
         ),
         child: SafeArea(
@@ -69,12 +68,12 @@ class _EqualizerState extends State<Equalizer> {
                       physics: const NeverScrollableScrollPhysics(),
                       padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.15),
                       shrinkWrap: true,
-                      itemCount: provider.bands.length,
+                      itemCount: provider.bands!.length,
                       scrollDirection: Axis.horizontal,
                       itemBuilder: (BuildContext context, int index) {
                         return BandSlider(
                             context: context,
-                            band: provider.bands[index],
+                            band: provider.bands![index],
                             textColor: textColor!,
                             iconColor: iconColor!,
                        );

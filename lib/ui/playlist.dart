@@ -1,6 +1,6 @@
-import 'package:chuni_player_revamped/provider/provider.dart';
+import 'package:mp6/provider/provider.dart';
 import 'package:flutter/material.dart';
-import 'package:chuni_player_revamped/custom_widgets.dart';
+import 'package:mp6/custom_widgets.dart';
 import 'package:provider/provider.dart';
 
 class Playlist extends StatelessWidget {
@@ -37,8 +37,7 @@ class Playlist extends StatelessWidget {
             image: provider.themeData["playlist"]?["backgroundImage"] == null ? null :
             DecorationImage(
                 fit: BoxFit.cover,
-                image: FileImage(provider.themeData["playlist"]!["backgroundImage"],
-                )
+                image: provider.themeData["playlist"]!["backgroundImage"],
             )
         ),
         child: SafeArea(

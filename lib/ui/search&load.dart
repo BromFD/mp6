@@ -1,6 +1,6 @@
-import 'package:chuni_player_revamped/provider/provider.dart';
+import 'package:mp6/provider/provider.dart';
 import 'package:flutter/material.dart';
-import 'package:chuni_player_revamped/custom_widgets.dart';
+import 'package:mp6/custom_widgets.dart';
 import 'package:provider/provider.dart';
 
 class SearchAndLoad extends StatefulWidget {
@@ -60,8 +60,7 @@ class _SearchAndLoadState extends State<SearchAndLoad> {
             image: provider.themeData["onlineSearch"]?["backgroundImage"] == null ? null :
             DecorationImage(
                 fit: BoxFit.cover,
-                image: FileImage(provider.themeData["onlineSearch"]!["backgroundImage"],
-                )
+                image: provider.themeData["onlineSearch"]!["backgroundImage"],
             )
         ),
         child: Center(

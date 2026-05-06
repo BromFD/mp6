@@ -1,8 +1,8 @@
-import 'package:chuni_player_revamped/log/logger.dart';
+import 'package:mp6/log/logger.dart';
 import 'package:flutter/material.dart';
-import 'package:chuni_player_revamped/custom_widgets.dart';
+import 'package:mp6/custom_widgets.dart';
 import 'package:provider/provider.dart';
-import 'package:chuni_player_revamped/provider/provider.dart';
+import 'package:mp6/provider/provider.dart';
 import 'package:marquee/marquee.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -24,6 +24,13 @@ class _MediatekaState extends State<Mediateka> {
     super.initState();
     searchController = TextEditingController();
     timeController = TextEditingController();
+  }
+
+  @override
+  void didChangeDependencies() async {
+    super.didChangeDependencies();
+    final provider = context.watch<PlayerProvider>();
+    await provider.prepareImages(context);
   }
 
   @override
@@ -235,7 +242,7 @@ class _MediatekaState extends State<Mediateka> {
 
             DrawerListTile(
               borderColor: drawerTextColor,
-              action: () => Navigator.pushNamed(context, "/equalizer"),
+              action: () => provider.isEqualizerInitialized ? Navigator.pushNamed(context, "/equalizer") : null,
               child: Text("Эквалайзер", style: TextStyle(color: drawerTextColor, fontSize: 0.02 * screenHeight),),
             ),
 
@@ -275,8 +282,7 @@ class _MediatekaState extends State<Mediateka> {
             :BoxDecoration(
             image: DecorationImage(
                 fit: BoxFit.cover,
-                image: FileImage(provider.themeData["mediateka"]!["backgroundImage"],
-                )
+                image: provider.themeData["mediateka"]!["backgroundImage"],
             )
         ),
         child: SafeArea(

@@ -1,6 +1,7 @@
 import 'dart:async';
-import 'package:chuni_player_revamped/custom_widgets.dart';
-import 'package:chuni_player_revamped/log/logger.dart';
+import 'package:flutter/foundation.dart';
+import 'package:mp6/custom_widgets.dart';
+import 'package:mp6/log/logger.dart';
 import 'package:flutter/material.dart' hide Element;
 import 'package:metadata_god/metadata_god.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -39,8 +40,9 @@ class PlayerProvider extends ChangeNotifier {
   };
   Map<String, Map<String, dynamic>> themeData = {};  // Отвечает за тему которую пользователь может изменить в настройках
   final equalizer = AndroidEqualizer(); // Эквалайзер
-  late final AndroidEqualizerParameters parameters; // Параметры эквалайзера
-  late final List<AndroidEqualizerBand> bands; // Дорожки
+  bool isEqualizerInitialized = false; // Чекает инициализацию
+  AndroidEqualizerParameters? parameters; // Параметры эквалайзера
+  List<AndroidEqualizerBand>? bands; // Дорожки
   List<double> gainList = []; // Усиление дорожек
   AudioPlayer player = AudioPlayer(); // Экземпляр класса AudioPlayer
   Map<String, dynamic>? currentAudioFile; // Текущий включенный трек и его метаданные
@@ -80,8 +82,9 @@ class PlayerProvider extends ChangeNotifier {
   Timer? currentAudioTimer; // Ежесекундно обновляет информацию о текущем треке
   Map<int, String> audioPictures = {}; // Изображения к трекам
   Map<int, int?> sourcePositionTracker = {}; // Отслеживает текущее положение аудиосурсов
-  bool shuffleMode = false;
-  List<int> order = [];
+  bool shuffleMode = false; // Отвечает за решим смешанного прослушивания
+  List<int> order = []; // Порядок смешанного воспроизведения
+  bool updateLock = false; // Лочит обновление информации о текущем треке (Только UI)
 
   PlayerProvider() { // Срабатывает на старте
     onLaunch();
@@ -105,13 +108,12 @@ class PlayerProvider extends ChangeNotifier {
     ); // Создаём плеер
     await scanAudioFiles();
     await loadAudioPictures();
-    themeData.isEmpty ? updateAllData() : null;
+    await updateAllData();
     await setStreams();
     await currentAudioUpdater();
-    await initializeEqualizer();
     await prepareCookieManager();
     await MediaStore.ensureInitialized();
-    await loadGain();
+    await imageGarbageCollector();
     loaded = true;
     notifyListeners();
   }
@@ -177,8 +179,7 @@ class PlayerProvider extends ChangeNotifier {
 
     // Сбор информации о текущем треке
     player.currentIndexStream.listen((index) { //Автоматическое обновление информации о текущем аудиофайле при смене индекса трека
-      appLog.i(index);
-      if (index != null && audioSources.isNotEmpty) {
+      if (index != null && audioSources.isNotEmpty && currentAudioSources.isNotEmpty && !updateLock) {
         int sourceIndex = shuffleMode ? order[index] : index;
         currentId = int.parse((currentAudioSources[sourceIndex] as IndexedAudioSource).tag.id);
         currentAudioFile = audioFiles[currentId];
@@ -192,7 +193,6 @@ class PlayerProvider extends ChangeNotifier {
         currentAudioInfo["position"] = position.inMicroseconds;
       }
     });
-
   }
 
   // Обновляет информацию о текущем треке
@@ -218,7 +218,7 @@ class PlayerProvider extends ChangeNotifier {
       int index = 0;
       for (var audio in audios) {
         try {
-          Metadata metadata = await MetadataGod.readMetadata(file: audio.data);
+          Metadata metadata = await MetadataGod.readMetadata(file: audio.data);;
           Map<String, dynamic> audioFile = {
             "index": index, // Индекс для связи с audioSources
             "uri": Uri.parse(audio.uri!),
@@ -231,7 +231,6 @@ class PlayerProvider extends ChangeNotifier {
           audioFiles[audio.id] = audioFile;
           index++;
         } catch (e) {
-          appLog.e(e);
           null;
         }
       }
@@ -251,6 +250,42 @@ Future<void> checkDisposedTracks() async {
     }
     notifyListeners();
 }
+
+Future<void> imageGarbageCollector() async {
+    Directory appDir = await getApplicationDocumentsDirectory();
+    Set<String> themeImages = {
+      for (var segment in themeDataRaw.values)
+        for (var element in segment.entries)
+          if (element.key == "backgroundImage" && element.value != null)
+            element.value
+    };
+    Set<String> audioImages = {
+      for (var picture in audioPictures.values)
+        picture
+    };
+
+    await for (var file in appDir.list()) {
+      if (RegExp(r'\.(jpg|jpeg|png|webp|gif|bmp)$', caseSensitive: false).hasMatch(file.path) && !themeImages.contains(file.path) && !audioImages.contains(file.path)) {
+        file.delete();
+      }
+    }
+}
+
+Future<void> prepareImages(BuildContext context) async {
+  Set<String> themeImages = {
+    for (var segment in themeDataRaw.values)
+      for (var element in segment.entries)
+        if (element.key == "backgroundImage" && element.value != null)
+          element.value
+  };
+  for (var imagePath in themeImages) {
+    precacheImage(
+        FileImage(File(imagePath)),
+        context
+    );
+  }
+}
+
   //Выбор директории c аудио файлами при помощи библиотеки FilePicker
   //Временно убран (Может и навсегда)
   /* Future<void> pickAudioFilesDirectory() async {
@@ -270,10 +305,10 @@ Future<void> checkDisposedTracks() async {
   Future<void> createMainList () async {
     audioSourcesIds = {for (var id in audioFiles.keys) id};
     playlists["main"] = audioSourcesIds;
-    currentPlaylist = currentAudioInfo["playlist"];
+    currentPlaylist = currentAudioInfo["playlist"] ?? "main";
     await setCurrentPlaylist(currentPlaylist);
     audioSourcesIds = {};
-    order.isNotEmpty ? await setSources() : await setSources(initialIndex: currentAudioInfo["sourceIndex"], initialPosition: Duration(microseconds: currentAudioInfo["position"]));
+    order.isNotEmpty ? await setSources() : setSources(initialIndex: currentAudioInfo["sourceIndex"], initialPosition: Duration(microseconds: currentAudioInfo["position"]));
     order.isNotEmpty ? await setShuffle(true, initialOrder: order) : null;
     notifyListeners();
   }
@@ -287,12 +322,23 @@ Future<void> checkDisposedTracks() async {
 
   // Ставить аудио сурсы
   Future<void> setSources({int initialIndex = 0, Duration initialPosition = Duration.zero}) async {
-
-      player.setAudioSources(
-        audioSources,
-        initialIndex: initialIndex,
-        initialPosition: initialPosition,
+    if (audioSources.isEmpty) {
+      readyToSetAudio = false;
+      notifyListeners();
+      return;
+    }
+    await player.setAudioSources(
+      audioSources,
+      initialIndex: initialIndex,
+      initialPosition: initialPosition,
     );
+
+    if (!isEqualizerInitialized) {
+      await initializeEqualizer();
+      await loadGain();
+      isEqualizerInitialized = true;
+    }
+
     readyToSetAudio = false;
     currentAudioSources = List.from(audioSources);
     notifyListeners();
@@ -474,7 +520,7 @@ Future<void> checkDisposedTracks() async {
   // Переключает смешанный режим воспроизведения
   Future<void> setShuffle(bool enabled, {List<int> initialOrder = const []}) async {
     shuffleMode = enabled;
-    if (shuffleMode){
+    if (shuffleMode && audioSources.isNotEmpty) {
       if (initialOrder.isNotEmpty) {
         if (player.processingState == ProcessingState.idle || player.processingState == ProcessingState.loading) { // Ждём загрузки треков
           await player.processingStateStream.firstWhere(
@@ -499,9 +545,23 @@ Future<void> checkDisposedTracks() async {
       updateSourcePositions();
       notifyListeners();
     } else {
-      disableShuffle();
-      setSources();
+      updateLock = true;
+      await restoreDefaultOrder();
+      await disableShuffle();
+      updateLock = false;
     }
+  }
+
+  Future<void> restoreDefaultOrder() async {
+    final int sourcesLength = player.effectiveIndices.length;
+    final int currentSourceIndex = currentAudioInfo["sourceIndex"]!;
+    final beforeSources = [for (int index = 0; index < currentSourceIndex; index++) audioSources[index]];
+    final afterSources = [for (int index = currentSourceIndex + 1; index < sourcesLength; index++) audioSources[index]];
+    await player.moveAudioSource(sourcePositionTracker[currentId]!, currentSourceIndex);
+    await player.removeAudioSourceRange(0, currentSourceIndex);
+    await player.removeAudioSourceRange(1, sourcesLength - currentSourceIndex);
+    await player.addAudioSources(afterSources);
+    await player.insertAudioSources(0, beforeSources);
   }
 
   Future<void> disableShuffle() async {
@@ -561,20 +621,20 @@ Future<void> checkDisposedTracks() async {
 
   Future<void> initializeEqualizer() async {
     parameters = await equalizer.parameters;
-    bands = parameters.bands;
+    bands = parameters!.bands;
     equalizer.setEnabled(true);
     notifyListeners();
   }
 
   void setGainList() async {
-    gainList = [for (var band in bands) band.gain];
+    gainList = [for (var band in bands!) band.gain];
     addItemToBox(gainList, "gainList");
   }
 
   Future<void> loadGain() async {
     if (gainList.isNotEmpty) {
       int index = 0;
-      for (var band in bands) {
+      for (var band in bands!) {
         band.setGain(gainList[index]);
         index += 1;
       }
@@ -585,27 +645,32 @@ Future<void> checkDisposedTracks() async {
   // Функции для изменения внешнего вида приложения
 
   //Изменение цветовой схемы приложения
-  Future<void> changeThemeData(dynamic data, String segment, String element) async {
+  Future<void> changeThemeData(dynamic data, String segment, String element, BuildContext context) async {
     themeDataRaw[segment]![element] = data;
     addItemToBox(themeDataRaw, "themeData");
-    updateData(data, segment, element);
+    updateData(data, segment, element, context);
     notifyListeners();
   }
 
   // Обновление цвета
-  void updateData(dynamic data, String segment, String element){
-    appLog.i("$data, $segment, $element");
-    themeData[segment]![element] = data == null ? data : element == "backgroundImage" ? File(data) : Color(data);
+  void updateData(dynamic data, String segment, String element, BuildContext context){
+    themeData[segment]![element] = data == null ? data : element == "backgroundImage" ? FileImage(File(data)) : Color(data);
+    data == null ? null : element == "backgroundImage" ?
+    precacheImage(
+        FileImage(File(data)),
+        context
+    )
+    : null;
     notifyListeners();
   }
 
   // Обновление всех цветов
-  void updateAllData() {
+  Future<void> updateAllData() async {
     themeData = {
       for (var segment in (themeDataRaw).entries)
         segment.key : {
           for (var element in segment.value.entries)
-            element.key : element.value == null ? null : element.value is String ? File(element.value) : Color(element.value)
+            element.key : element.value == null ? null : element.value is String ? FileImage(File(element.value)) : Color(element.value)
         }
     };
     notifyListeners();
@@ -655,14 +720,24 @@ Future<void> checkDisposedTracks() async {
       type: FileType.image,
     );
     if (trackImage != null) {
-      String trackImagePath = trackImage.files.first.path!;
-      File trackImageFile = File(trackImagePath);
+      Directory appDir = await getApplicationDocumentsDirectory();
+      File chosenFile = File(trackImage.files.first.path!);
+      String trackImageName = trackImage.files.first.name;
+      String trackImagePath = '${appDir.path}/$trackImageName';
+      File trackImageFile =  await chosenFile.copy(trackImagePath);
       Picture trackPicture = Picture(mimeType: "image/${trackImagePath.substring(trackImagePath.lastIndexOf(".") + 1)}", data: trackImageFile.readAsBytesSync());
       audioFiles[currentId]!["picture"] = trackPicture;
       audioPictures[currentId!] = trackImagePath;
       addItemToBox(audioPictures, "audioPictures");
       notifyListeners();
     }
+  }
+
+  Future<void> removeAudioPicture() async {
+    audioFiles[currentId]!["picture"] = null;
+    audioPictures.remove(currentId);
+    addItemToBox(audioPictures, "audioPictures");
+    notifyListeners();
   }
 
   // Функции связанные с поиском и скачиванием аудио с интернета

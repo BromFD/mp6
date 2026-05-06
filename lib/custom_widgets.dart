@@ -1,11 +1,13 @@
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:provider/provider.dart';
-import 'package:chuni_player_revamped/provider/provider.dart';
+import 'package:mp6/provider/provider.dart';
 import 'package:marquee/marquee.dart';
-import 'package:chuni_player_revamped/log/logger.dart';
+import 'package:mp6/log/logger.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -236,7 +238,6 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
                 if (provider.readyToSetAudio) {
                   provider.setSources(initialIndex: provider.sourcePositionTracker[widget.globalIndex] ?? 0);
                 } else {
-                  appLog.i(widget.globalIndex);
                   provider.setAudioFile(provider.sourcePositionTracker[widget.globalIndex] ?? 0);
                 }
               }
@@ -399,8 +400,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
           : BoxDecoration(
           image: DecorationImage(
               fit: BoxFit.cover,
-              image: FileImage(provider.themeData["mini"]!["backgroundImage"],
-              )
+              image: provider.themeData["mini"]!["backgroundImage"],
           )
       ),
       height: screenHeight,
@@ -430,7 +430,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
             height: screenHeight * 0.5,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              image: DecorationImage(image: MemoryImage(provider.audioFiles[provider.currentId]!["picture"].data), fit: BoxFit.fitWidth),
+              image: DecorationImage(image: MemoryImage(provider.audioFiles[provider.currentId]!["picture"].data), fit: BoxFit.cover),
             ),
           )
               : SizedBox(
@@ -455,6 +455,17 @@ class _MiniPlayerState extends State<MiniPlayer> {
                           text: Text("Добавить или изменить\n изображение у трека", style: TextStyle(fontSize: 18, color: provider.themeData["alert"]!["text"],),),
                           onTap: () async {
                             await provider.setAudioPicture();
+                          },
+                          icon: Icon(Icons.arrow_forward_ios, color: provider.themeData["alert"]!["icon"],)
+                      ),
+                    ),
+                    SizedBox(
+                      width: screenWidth * 0.8,
+                      height: screenHeight * 0.1,
+                      child: SettingsEntry(
+                          text: Text("Убрать изображение\n у трека", style: TextStyle(fontSize: 18, color: provider.themeData["alert"]!["text"],),),
+                          onTap: () async {
+                            await provider.removeAudioPicture();
                           },
                           icon: Icon(Icons.arrow_forward_ios, color: provider.themeData["alert"]!["icon"],)
                       ),
@@ -1060,8 +1071,8 @@ class _BandSliderState extends State<BandSlider> {
                     child: Slider(
                       value: dragValue == 0 ? widget.band.gain : dragValue,
                       // Текущее положение точки зависит от положения пальца при перемещении и от текущей позиции трека в состоянии поеоя
-                      min: provider.parameters.minDecibels,
-                      max: provider.parameters.maxDecibels,
+                      min: provider.parameters!.minDecibels,
+                      max: provider.parameters!.maxDecibels,
                       onChangeStart: (value) {
                         isDragged = true;
                       },
@@ -1176,7 +1187,6 @@ class _ThemeCreationAlertDialogState extends State<ThemeCreationAlertDialog> {
       Icons.text_format : "text",
       Icons.music_note : "icon",
     };
-    appLog.i(provider.themeDataRaw);
     return Dialog(
       backgroundColor: provider.themeData["alert"]!["background"],
       insetPadding: EdgeInsets.all(10),
@@ -1228,7 +1238,7 @@ class _ThemeCreationAlertDialogState extends State<ThemeCreationAlertDialog> {
 
                                           TextButton(
                                             onPressed: () async {
-                                              await provider.changeThemeData(null, segmentMap[segment]!, elementMap[element]!);
+                                              await provider.changeThemeData(null, segmentMap[segment]!, elementMap[element]!, context);
                                               Navigator.pop(context);
                                             },
                                             child: Text("Убрать", style: TextStyle(color: provider.themeData["alert"]!["text"]),),
@@ -1236,11 +1246,16 @@ class _ThemeCreationAlertDialogState extends State<ThemeCreationAlertDialog> {
 
                                           TextButton(
                                             onPressed: () async {
-                                              FilePickerResult? backgroundImage = await FilePicker.platform.pickFiles(
+                                              FilePickerResult? chosenFile = await FilePicker.platform.pickFiles(
                                                 type: FileType.image,
                                               );
-                                              if (backgroundImage != null) {
-                                                await provider.changeThemeData(backgroundImage.files.first.path, segmentMap[segment]!, elementMap[element]!);
+
+                                              if (chosenFile != null) {
+                                                Directory appDir = await getApplicationDocumentsDirectory();
+                                                String imageName = chosenFile.files.first.name;
+                                                String backgroundImage = "${appDir.path}/$imageName";
+                                                await File(chosenFile.files.first.path!).copy(backgroundImage);
+                                                await provider.changeThemeData(backgroundImage, segmentMap[segment]!, elementMap[element]!, context);
                                               }
                                               Navigator.pop(context);
                                             },
@@ -1256,42 +1271,64 @@ class _ThemeCreationAlertDialogState extends State<ThemeCreationAlertDialog> {
                             } else {
                               showDialog(
                                   context: context,
-                                  builder: (context) => Dialog(
-                                    backgroundColor: provider.themeData["alert"]!["background"],
-                                    child: SizedBox(
-                                      height: screenHeight * 0.8,
-                                      width: screenWidth * 0.8,
-                                      child: Column(
-                                        children: [
-                                          Padding(
-                                            padding: const EdgeInsets.all(20),
-                                            child: Center(child: Text("Выберите цвет", style: TextStyle(color: provider.themeData["alert"]!["text"], fontSize: screenHeight * 0.03),),),
-                                          ),
-                                          Expanded(
-                                            child: SizedBox(
-                                              width: screenWidth * 0.8,
-                                              height: screenHeight * 0.8,
-                                              child: SingleChildScrollView(
-                                                child: ColorPicker(
-                                                  pickerColor: pickerColor,
-                                                  onColorChanged: changeColor,
+                                  builder: (context) => StatefulBuilder(
+                                    builder: (context, setInnerState) {
+                                      return Dialog(
+                                        backgroundColor: Colors.white,
+                                        child: SizedBox(
+                                          height: screenHeight * 0.8,
+                                          width: screenWidth * 0.8,
+                                          child: Column(
+                                            children: [
+                                              Padding(
+                                                padding: const EdgeInsets.all(20),
+                                                child: Center(child: Text("Выберите цвет", style: TextStyle(color: Colors.black, fontSize: screenHeight * 0.03),),),
+                                              ),
+
+                                              Expanded(
+                                                child: SingleChildScrollView(
+                                                  child: Padding(
+                                                    padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.1),
+                                                    child: Column(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        ColorPicker(
+                                                          pickerColor: pickerColor,
+                                                          onColorChanged: (color) {
+                                                            changeColor(color);
+                                                            setInnerState(() {});
+                                                          },
+                                                        ),
+                                                        Padding(
+                                                          padding: EdgeInsets.symmetric(vertical: screenHeight * 0.0225),
+                                                          child: ColorPickerInput(
+                                                            pickerColor,
+                                                            (color) {
+                                                              changeColor(color);
+                                                              setInnerState(() {});
+                                                            },
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                          ),
 
-                                          ElevatedButton(
-                                            child: Text('Подтвердить', style: TextStyle(color: provider.themeData["alert"]!["text"],),),
-                                            onPressed: () async {
-                                              final hexCode = '0x${pickerColor.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}';
-                                              await provider.changeThemeData(int.parse(hexCode), segmentMap[segment]!, elementMap[element]!);
-                                              Navigator.of(context).pop();
-                                            },
-                                          ),
+                                              ElevatedButton(
+                                                child: Text('Подтвердить', style: TextStyle(color: Colors.black),),
+                                                onPressed: () async {
+                                                  final hexCode = '0x${pickerColor.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}';
+                                                  await provider.changeThemeData(int.parse(hexCode), segmentMap[segment]!, elementMap[element]!, context);
+                                                  Navigator.of(context).pop();
+                                                },
+                                              ),
 
-                                        ],
-                                      ),
-                                    ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    }
                                   )
                             );
                           }
