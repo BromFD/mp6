@@ -55,6 +55,19 @@ class _MediatekaState extends State<Mediateka> {
           Center(child: CircularProgressIndicator()),
         ],
       ),
+      floatingActionButton: FloatingActionButton.large(
+        onPressed: () {
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            builder: (context) {
+              return RecoveryScreen(
+              );
+            },
+          );
+        },
+        child: Icon(Icons.bug_report),
+      ),
     ) : Scaffold(
       key: scaffoldKey,
       backgroundColor: Colors.transparent,
@@ -211,7 +224,11 @@ class _MediatekaState extends State<Mediateka> {
                   ),
                   child: Text("О нас", style: TextStyle(color: drawerTextColor, fontSize: 0.02 * screenHeight),),
                 ),
-
+                DrawerListTile(
+                  borderColor: drawerTextColor,
+                  action: () => Navigator.pushNamed(context, "/recovery"),
+                  child: Text("Восстановление", style: TextStyle(color: drawerTextColor, fontSize: 0.02 * screenHeight),),
+                ),
               ],
             ),
           ),
@@ -363,7 +380,7 @@ class _MediatekaState extends State<Mediateka> {
                           children: [
 
                             SizedBox(
-                              width: provider.isInteractingWithInput ? screenWidth * 0.625 : screenWidth * 0.5,
+                              width: provider.isInteractingWithInput ? screenWidth * 0.625 : screenWidth * 0.45,
                               child: TextField(
                                 controller: searchController,
                                 style: TextStyle(color: textColor),

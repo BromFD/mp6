@@ -2,6 +2,7 @@ import 'package:mp6/provider/provider.dart';
 import 'package:flutter/material.dart';
 import 'package:mp6/custom_widgets.dart';
 import 'package:provider/provider.dart';
+import 'package:mp6/log/logger.dart';
 
 class SearchAndLoad extends StatefulWidget {
   const SearchAndLoad({super.key});
@@ -25,8 +26,14 @@ class _SearchAndLoadState extends State<SearchAndLoad> {
   @override
   void dispose() {
     if (savedProvider.player.sequenceState?.currentSource?.tag.id[0] == "f") {
-      savedProvider.setCurrentPlaylist(savedProvider.currentPlaylist);
-      Future.microtask(() => savedProvider.pause());
+      savedProvider.isAudioSaved = false;
+      Future.microtask(() async {
+        await savedProvider.setCurrentPlaylist(savedProvider.currentPlaylist, resetOrder: false);
+        await savedProvider.setSources(initialIndex: savedProvider.savedAudio["sourceIndex"], initialPosition: Duration(microseconds: savedProvider.savedAudio["position"]));
+        await savedProvider.setShuffle(true, initialOrder: savedProvider.order);
+        await savedProvider.pause();
+        savedProvider.savedAudio = {};
+      });
     }
     super.dispose();
   }

@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:mp6/custom_widgets.dart';
-import 'package:mp6/log/logger.dart';
 import 'package:flutter/material.dart' hide Element;
 import 'package:metadata_god/metadata_god.dart';
+import 'package:mp6/log/logger.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
@@ -13,7 +13,6 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:dio/dio.dart';
 import 'package:html/dom.dart';
-import 'package:html/dom_parsing.dart';
 import 'package:html/parser.dart';
 import 'package:punycoder/punycoder.dart';
 import 'package:device_info_plus/device_info_plus.dart';
@@ -23,6 +22,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+import 'package:flutter_phoenix/flutter_phoenix.dart';
 
 class PlayerProvider extends ChangeNotifier {
   Directory audioFilesDirectory = Directory("/storage/emulated/0/Music"); // Папка с музыкой
@@ -85,6 +85,8 @@ class PlayerProvider extends ChangeNotifier {
   bool shuffleMode = false; // Отвечает за решим смешанного прослушивания
   List<int> order = []; // Порядок смешанного воспроизведения
   bool updateLock = false; // Лочит обновление информации о текущем треке (Только UI)
+  Map<String, dynamic> savedAudio = {}; // Сохранённа информация из currentAudioInfo
+  bool isAudioSaved = false; // Флаг сохранения аудио
 
   PlayerProvider() { // Срабатывает на старте
     onLaunch();
@@ -218,7 +220,7 @@ class PlayerProvider extends ChangeNotifier {
       int index = 0;
       for (var audio in audios) {
         try {
-          Metadata metadata = await MetadataGod.readMetadata(file: audio.data);;
+          Metadata metadata = await MetadataGod.readMetadata(file: audio.data);
           Map<String, dynamic> audioFile = {
             "index": index, // Индекс для связи с audioSources
             "uri": Uri.parse(audio.uri!),
@@ -231,6 +233,8 @@ class PlayerProvider extends ChangeNotifier {
           audioFiles[audio.id] = audioFile;
           index++;
         } catch (e) {
+          appLog.i(audio.title);
+          appLog.e(e);
           null;
         }
       }
@@ -239,6 +243,7 @@ class PlayerProvider extends ChangeNotifier {
   }
 }
 
+// Проверяет удалённые треки из плейлистов
 Future<void> checkDisposedTracks() async {
     Set<int> allAudioIds = Set.from(audioFiles.keys);
     for (var playlist in playlists.values) {
@@ -251,6 +256,7 @@ Future<void> checkDisposedTracks() async {
     notifyListeners();
 }
 
+// Удаляет неиспользуемые изображения в директории приложения
 Future<void> imageGarbageCollector() async {
     Directory appDir = await getApplicationDocumentsDirectory();
     Set<String> themeImages = {
@@ -271,6 +277,7 @@ Future<void> imageGarbageCollector() async {
     }
 }
 
+// Прекэширует изображения, чтобы не лагали при переходах
 Future<void> prepareImages(BuildContext context) async {
   Set<String> themeImages = {
     for (var segment in themeDataRaw.values)
@@ -284,6 +291,27 @@ Future<void> prepareImages(BuildContext context) async {
         context
     );
   }
+}
+
+// Система восстановления
+Future<void> recovery(String level, BuildContext context) async {
+    var playerData = Hive.box("playerData");
+    await player.stop();
+    await player.dispose();
+    if (level == "level1") {
+      currentAudioTimer?.cancel();
+      await playerData.delete("currentAudioInfo");
+    } else if (level == "level2") {
+      await playerData.deleteAll([
+        "currentAudioInfo",
+        "playlist",
+        "favoriteAudios",
+      ]);
+    }
+    else if (level == "level3") {
+      await playerData.clear();
+    }
+    Phoenix.rebirth(context);
 }
 
   //Выбор директории c аудио файлами при помощи библиотеки FilePicker
@@ -443,10 +471,10 @@ Future<void> prepareImages(BuildContext context) async {
   }
 
   // Устанавливает текущий плейлист
-  Future<void> setCurrentPlaylist(String name) async {
+  Future<void> setCurrentPlaylist(String name, {bool resetOrder = true}) async {
     currentPlaylist = name;
     currentAudioInfo["playlist"] = currentPlaylist;
-    currentAudioInfo["order"] = [];
+    resetOrder == true ? currentAudioInfo["order"] = [] : null;
     if (currentPlaylist != "favorite") {
       audioSources = [for (var id in playlists[name]!) AudioSource.uri(
         audioFiles[id]?["uri"],
@@ -531,7 +559,7 @@ Future<void> prepareImages(BuildContext context) async {
         final orderedSources = [for (int index in initialOrder) audioSources[index]];
         await player.removeAudioSourceRange(0, audioSources.length);
         await player.addAudioSources(orderedSources);
-        await player.seek(Duration(microseconds: currentAudioInfo["position"]), index: order.indexOf(currentAudioInfo["sourceIndex"]));
+        await player.seek(Duration(microseconds: savedAudio.isEmpty ? currentAudioInfo["position"] : savedAudio["position"]), index: savedAudio.isEmpty ? order.indexOf(currentAudioInfo["sourceIndex"]) : order.indexOf(savedAudio["sourceIndex"]));
       } else {
         final shuffledIndices = [for (int index in player.effectiveIndices) if (index != sourcePositionTracker[currentId]) index];
         shuffledIndices.shuffle();
@@ -930,7 +958,7 @@ Future<void> prepareImages(BuildContext context) async {
     final rawThemeData = playerData.get("themeData", defaultValue: themeDataRaw);
     playlists = convertRawToOriginal(rawPlaylists, "playlist");
     themeDataRaw = convertRawToOriginal(rawThemeData, "themeData");
-    audioFilesDirectory = Directory(playerData.get("audioFilesDirectory", defaultValue: audioFilesDirectory.path).toString());
+    //audioFilesDirectory = Directory(playerData.get("audioFilesDirectory", defaultValue: audioFilesDirectory.path).toString());
     gainList = [for (var gain in playerData.get("gainList", defaultValue: [])) (gain as double)];
     ignoreInterruptions = playerData.get("ignoreInterruptions", defaultValue: false);
     favoriteAudios = {for (var index in playerData.get("favoriteAudios", defaultValue: [])) (index as int)};

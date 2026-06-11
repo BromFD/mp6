@@ -3,11 +3,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_background/just_audio_background.dart';
 import 'package:provider/provider.dart';
 import 'package:mp6/provider/provider.dart';
 import 'package:marquee/marquee.dart';
-import 'package:mp6/log/logger.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -78,7 +76,7 @@ class SettingsEntry extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: LayoutBuilder(
-        builder: (context, constraints){
+        builder: (context, constraints) {
           double width = constraints.maxWidth;
           return Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -989,6 +987,10 @@ class YTSearchTile extends StatelessWidget {
               IconButton(
                 onPressed: () async {
                   if (provider.player.sequenceState.currentSource?.tag.id != "f$index") {
+                    if (!provider.isAudioSaved) {
+                      provider.savedAudio = Map.from(provider.currentAudioInfo);
+                      provider.isAudioSaved = true;
+                    }
                     await provider.playFound(provider.foundAudioFiles[index]["trackPageUrl"]!, provider.foundAudioFiles[index]["name"]!, index);
                   } else {
                     if (provider.player.playing) {
@@ -1409,3 +1411,132 @@ class _PlaylistCreationAlertDialogState extends State<PlaylistCreationAlertDialo
     );
   }
 }
+
+class RecoveryScreen extends StatelessWidget {
+  const RecoveryScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<PlayerProvider>();
+    return Material(
+      child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            final height = constraints.maxHeight;
+            return Container(
+              width: width,
+              height: height,
+              color: Colors.black,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+
+                  Text("Режим восстановления", style: TextStyle(fontSize: height * 0.05, color: Colors.white,),textAlign: TextAlign.center,),
+                  Padding(padding: EdgeInsets.only(bottom: height * 0.075),),
+
+                  Text("Уровень 1: Очистка данных о текущем треке и перезапуск", style: TextStyle(fontSize: height * 0.025, color: Colors.white),textAlign: TextAlign.center),
+                  ElevatedButton(
+                      onPressed: () {
+                        showDialog(
+                            context: context,
+                            builder: (context) => ConfirmationAlertDialog(
+                              titleText: "Вы точно хотите запустить программу восстановления уровня 1?",
+                              confirm: () async {
+                                await provider.recovery("level1", context);
+                                Navigator.pop(context);
+                              },
+                              deny: () {
+                                Navigator.pop(context);
+                              },
+                            )
+                        );
+                      },
+                      child: Text("Очистить данные")
+                  ),
+                  Padding(padding: EdgeInsets.only(bottom: height * 0.05),),
+
+                  Text("Уровень 2: Очистка данных о текущем треке, плейлистах, избранном и перезапуск", style: TextStyle(fontSize: height * 0.025, color: Colors.white),textAlign: TextAlign.center),
+                  ElevatedButton(
+                      onPressed: () {
+                        showDialog(
+                            context: context,
+                            builder: (context) => ConfirmationAlertDialog(
+                              titleText: "Вы точно хотите запустить программу восстановления уровня 2?",
+                              confirm: () async {
+                                await provider.recovery("level2", context);
+                                Navigator.pop(context);
+                              },
+                              deny: () {
+                                Navigator.pop(context);
+                              },
+                            )
+                        );
+                      },
+                      child: Text("Очистить данные")
+                  ),
+                  Padding(padding: EdgeInsets.only(bottom: height * 0.05),),
+
+                  Text("Уровень 3: Полная очистка данных и перезапуск", style: TextStyle(fontSize: height * 0.025, color: Colors.white),textAlign: TextAlign.center),
+                  ElevatedButton(
+                      onPressed: () {
+                        showDialog(
+                            context: context,
+                            builder: (context) => ConfirmationAlertDialog(
+                                titleText: "Вы точно хотите запустить программу восстановления уровня 3?",
+                                confirm: () async {
+                                  await provider.recovery("level3", context);
+                                  Navigator.pop(context);
+                                },
+                                deny: () {
+                                  Navigator.pop(context);
+                                },
+                          )
+                        );
+                      },
+                      child: Text("Очистить данные")
+                  ),
+
+                  Padding(padding: EdgeInsets.only(bottom: height * 0.05),),
+                  ElevatedButton(
+                      onPressed: () {
+                        provider.loaded ? Navigator.pushNamed(context, "/") : Navigator.pop(context);
+                      },
+                      child: Text("Выйти из режима восстановления"),
+                  )
+
+                ],
+              ),
+            );
+          }
+      ),
+    );
+  }
+}
+
+class ConfirmationAlertDialog extends StatelessWidget {
+  final String titleText;
+  final VoidCallback confirm;
+  final VoidCallback deny;
+  const ConfirmationAlertDialog({
+    super.key,
+    required this.titleText,
+    required this.confirm,
+    required this.deny,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<PlayerProvider>();
+    return AlertDialog(
+      backgroundColor: provider.themeData["alert"]?["background"] ?? Colors.white,
+      title: Text(titleText, style: TextStyle(color: provider.themeData["alert"]?["text"] ?? Colors.black)),
+      actionsAlignment: MainAxisAlignment.spaceAround,
+      actions: [
+        TextButton(onPressed: deny, child: Text("Отклонить", style: TextStyle(color: provider.themeData["alert"]?["text"] ?? Colors.black))),
+        TextButton(onPressed: confirm, child: Text("Подтвердить", style: TextStyle(color: provider.themeData["alert"]?["text"] ?? Colors.black))),
+      ],
+    );
+  }
+}
+
