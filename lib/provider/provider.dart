@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:mp6/custom_widgets.dart';
 import 'package:flutter/material.dart' hide Element;
-import 'package:metadata_god/metadata_god.dart';
 import 'package:mp6/log/logger.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:file_picker/file_picker.dart';
@@ -85,8 +84,9 @@ class PlayerProvider extends ChangeNotifier {
   bool shuffleMode = false; // Отвечает за решим смешанного прослушивания
   List<int> order = []; // Порядок смешанного воспроизведения
   bool updateLock = false; // Лочит обновление информации о текущем треке (Только UI)
-  Map<String, dynamic> savedAudio = {}; // Сохранённа информация из currentAudioInfo
+  Map<String, dynamic> savedAudio = {}; // Сохранённая информация из currentAudioInfo
   bool isAudioSaved = false; // Флаг сохранения аудио
+  bool resetSources = true;  // Влияет на обновление аудио сурсов в createMainList
 
   PlayerProvider() { // Срабатывает на старте
     onLaunch();
@@ -220,26 +220,37 @@ class PlayerProvider extends ChangeNotifier {
       int index = 0;
       for (var audio in audios) {
         try {
-          Metadata metadata = await MetadataGod.readMetadata(file: audio.data);
           Map<String, dynamic> audioFile = {
             "index": index, // Индекс для связи с audioSources
             "uri": Uri.parse(audio.uri!),
             "rawPath": audio.data,
             "name": audio.title,
-            "picture": metadata.picture,
-            "duration": metadata.durationMs,
-            "size": metadata.fileSize,
+            "picture": null,
+            "artwork": null,
+            "duration": audio.duration,
+            "size": audio.size,
           };
           audioFiles[audio.id] = audioFile;
           index++;
         } catch (e) {
-          appLog.i(audio.title);
-          appLog.e(e);
           null;
         }
       }
+      Iterable<Future<void>> artworkFutures = audios.map((audio) async {
+        try {
+          final bytes = await onAudioQuery.queryArtwork(audio.id, ArtworkType.AUDIO);
+          if (audioFiles.containsKey(audio.id)) {
+            audioFiles[audio.id]!["artwork"] = bytes;
+          }
+        } catch (e) {
+          null;
+        }
+      });
+
+      await Future.wait(artworkFutures);
       await checkDisposedTracks();
       await createMainList();
+      notifyListeners();
   }
 }
 
@@ -336,8 +347,10 @@ Future<void> recovery(String level, BuildContext context) async {
     currentPlaylist = currentAudioInfo["playlist"] ?? "main";
     await setCurrentPlaylist(currentPlaylist);
     audioSourcesIds = {};
-    order.isNotEmpty ? await setSources() : setSources(initialIndex: currentAudioInfo["sourceIndex"], initialPosition: Duration(microseconds: currentAudioInfo["position"]));
-    order.isNotEmpty ? await setShuffle(true, initialOrder: order) : null;
+    if (resetSources) {
+      order.isNotEmpty ? await setSources() : setSources(initialIndex: currentAudioInfo["sourceIndex"], initialPosition: Duration(microseconds: currentAudioInfo["position"]));
+      order.isNotEmpty ? await setShuffle(true, initialOrder: order) : null;
+    }
     notifyListeners();
   }
 
@@ -346,6 +359,11 @@ Future<void> recovery(String level, BuildContext context) async {
     player.seek(Duration.zero, index: index);
     notifyListeners();
     play();
+  }
+
+  // Управляет флагом перезагрузки сурсов
+  Future<void> switchResetSources() async {
+      resetSources ? resetSources = false : resetSources = true;
   }
 
   // Ставить аудио сурсы
@@ -507,11 +525,15 @@ Future<void> recovery(String level, BuildContext context) async {
 
   // Удаляет аудио из текущего плейлиста
   Future<void> removeFromExistingPlaylist(int audioId) async {
+    if (shuffleMode) {
+      await disableShuffle();
+      await restoreDefaultOrder();
+    }
     playlists[currentPlaylist]!.remove(audioId);
     int index = 0;
     int? removeIndex;
     List<AudioSource> tempSources = [];
-    for (var (source as IndexedAudioSource) in audioSources){
+    for (var (source as IndexedAudioSource) in audioSources) {
       if (int.parse(source.tag.id) != audioId) {
         tempSources.add(source);
       } else {
@@ -520,8 +542,11 @@ Future<void> recovery(String level, BuildContext context) async {
       index++;
     }
     audioSources = tempSources;
+    currentAudioSources = audioSources;
     player.removeAudioSourceAt(removeIndex!);
     addItemToBox(playlists, "playlist");
+    updateSourcePositions();
+    setCurrentPlaylist(currentPlaylist);
     notifyListeners();
   }
 
@@ -738,7 +763,7 @@ Future<void> recovery(String level, BuildContext context) async {
 
   Future<void> loadAudioPictures() async {
     for (var id in audioPictures.keys) {
-      audioFiles[id]!["picture"] = Picture(mimeType: "image/${audioPictures[id]!.substring(audioPictures[id]!.lastIndexOf(".") + 1)}", data: File(audioPictures[id]!).readAsBytesSync());
+      audioFiles[id]!["picture"] = audioPictures[id];
     }
     notifyListeners();
   }
@@ -752,9 +777,8 @@ Future<void> recovery(String level, BuildContext context) async {
       File chosenFile = File(trackImage.files.first.path!);
       String trackImageName = trackImage.files.first.name;
       String trackImagePath = '${appDir.path}/$trackImageName';
-      File trackImageFile =  await chosenFile.copy(trackImagePath);
-      Picture trackPicture = Picture(mimeType: "image/${trackImagePath.substring(trackImagePath.lastIndexOf(".") + 1)}", data: trackImageFile.readAsBytesSync());
-      audioFiles[currentId]!["picture"] = trackPicture;
+      await chosenFile.copy(trackImagePath);
+      audioFiles[currentId]!["picture"] = trackImagePath;
       audioPictures[currentId!] = trackImagePath;
       addItemToBox(audioPictures, "audioPictures");
       notifyListeners();
@@ -874,8 +898,9 @@ Future<void> recovery(String level, BuildContext context) async {
 
           downloadProgress = 0;
           showNotification("Файл скачен успешно");
+          await switchResetSources();
           await scanAudioFiles();
-          pause();
+          await switchResetSources();
         } catch (e) {
           showNotification("Ошибка скачивания");
         }

@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:on_audio_query/on_audio_query.dart';
 import 'package:mp6/log/logger.dart';
 import 'package:flutter/material.dart';
 import 'package:mp6/custom_widgets.dart';
@@ -5,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:mp6/provider/provider.dart';
 import 'package:marquee/marquee.dart';
 import 'package:just_audio/just_audio.dart';
+import 'dart:typed_data';
 
 class Mediateka extends StatefulWidget {
   const Mediateka({super.key});
@@ -47,6 +50,7 @@ class _MediatekaState extends State<Mediateka> {
     final bool isPlaying = provider.player.playing;
     final bool isUserMakingPlaylist = provider.isUserMakingPlaylist;
     final bool isLoaded = provider.loaded;
+    final Uint8List? artworkBytes = provider.audioFiles[provider.currentId]?["artwork"] as Uint8List?;
 
     return !isLoaded ? Scaffold(
       body: Column(
@@ -335,13 +339,17 @@ class _MediatekaState extends State<Mediateka> {
                             provider.isInteractingWithInput ?
                               SizedBox.shrink()
                               : IconButton(
-                              onPressed: (){
-                                if (provider.shuffleMode) {
-                                  provider.setShuffle(false);
-                                  showNotification("Рандомное воспроизведение выключено");
+                              onPressed: () {
+                                if (provider.playlists[provider.currentPlaylist]!.isNotEmpty && !provider.readyToSetAudio) {
+                                  if (provider.shuffleMode) {
+                                    provider.setShuffle(false);
+                                    showNotification("Рандомное воспроизведение выключено");
+                                  } else {
+                                    provider.setShuffle(true);
+                                    showNotification("Включено рандомное воспроизведение");
+                                  }
                                 } else {
-                                  provider.setShuffle(true);
-                                  showNotification("Включено рандомное воспроизведение");
+                                  showNotification("Выберите песню из текущего плейлиста, чтобы включить смешанный режим");
                                 }
                               },
                               icon: Container(
@@ -359,8 +367,12 @@ class _MediatekaState extends State<Mediateka> {
                             SizedBox.shrink()
                             : IconButton(
                                 onPressed: () {
-                                  provider.setLoopMode(provider.player.loopMode == LoopMode.all ? LoopMode.off : LoopMode.all);
-                                  showNotification(provider.player.loopMode == LoopMode.all ? "Включён цикличный режим воспроизведения" : "Цикличный режим воспроизведения выключен");
+                                  if (provider.playlists[provider.currentPlaylist]!.isNotEmpty && !provider.readyToSetAudio) {
+                                    provider.setLoopMode(provider.player.loopMode == LoopMode.all ? LoopMode.off : LoopMode.all);
+                                    showNotification(provider.player.loopMode == LoopMode.all ? "Включён цикличный режим воспроизведения" : "Цикличный режим воспроизведения выключен");
+                                  } else {
+                                    showNotification("Выберите песню из текущего плейлиста, чтобы включить цикличный режим");
+                                  }
                                 },
                                 icon: Container(
                                     padding: EdgeInsets.all(4.0),
@@ -471,15 +483,25 @@ class _MediatekaState extends State<Mediateka> {
                   ],
                 )
                 :  (provider.currentAudioFile != null) ? ListTile(
-                  leading: SizedBox(
-                    width: screenWidth * 0.1,
-                    child: provider.audioFiles[provider.currentId]!["picture"] != null ?
-                    Container(
+                  leading: Padding(
+                    padding: EdgeInsets.only(left: screenWidth * 0.03),
+                    child: SizedBox(
+                      width: screenWidth * 0.13,
+                      child: provider.audioFiles[provider.currentId]!["picture"] != null ?
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          image: DecorationImage(image: FileImage(File(provider.audioFiles[provider.currentId]?["picture"])), fit: BoxFit.fitWidth),
+                        ),
+                      ) : artworkBytes != null ? Container(
+                      width: screenHeight * 0.4,
+                      height: screenHeight * 0.5,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        image: DecorationImage(image: MemoryImage(provider.audioFiles[provider.currentId]!["picture"].data), fit: BoxFit.fitWidth),
-                      ),
-                    ) : Icon(Icons.music_note, color: iconColor, size: screenHeight * 0.04),
+                        image: DecorationImage(image: MemoryImage(artworkBytes), fit: BoxFit.fitWidth),
+                        ),
+                      ) : Icon(Icons.music_note, color: iconColor,),
+                    ),
                   ),
                   title: SizedBox(
                     width: screenWidth * 0.625,

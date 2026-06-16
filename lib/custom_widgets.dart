@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:hive_flutter/adapters.dart';
+import 'package:on_audio_query/on_audio_query.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:mp6/provider/provider.dart';
 import 'package:marquee/marquee.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'dart:typed_data';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -148,6 +151,7 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
     final String minutes = duration.inMinutes.toString();
     final String seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
     bool isSelected = provider.audioSourcesIds.contains(widget.globalIndex);
+    final Uint8List? artworkBytes = provider.audioFiles[widget.globalIndex]?["artwork"] as Uint8List?;
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -157,16 +161,26 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
             border: Border.all(color: Colors.white, width: 3),
           ) : BoxDecoration(),
           child: ListTile(
-            leading: SizedBox(
-              width: width * 0.2,
-              child: provider.audioFiles[widget.globalIndex]?["picture"] != null ?
-              Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  image: DecorationImage(image: MemoryImage(provider.audioFiles[widget.globalIndex]?["picture"].data), fit: BoxFit.fitWidth),
-                ),
-              ) :
-              Icon(Icons.music_note, color: widget.iconColor,),),
+            leading: Padding(
+              padding: EdgeInsets.only(left: width * 0.035),
+              child: SizedBox(
+                width: width * 0.13,
+                child: provider.audioFiles[widget.globalIndex]?["picture"] != null ?
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    image: DecorationImage(image: FileImage(File(provider.audioFiles[widget.globalIndex]?["picture"])), fit: BoxFit.fitWidth),
+                  ),
+                ) : artworkBytes != null ?
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    image: DecorationImage(image: MemoryImage(artworkBytes), fit: BoxFit.fitWidth),
+                  ),
+                ) :
+                Icon(Icons.music_note, color: widget.iconColor,),
+              ),
+            ),
             title: SizedBox(
               width: width * 0.625,
               child: Text(provider.audioFiles[widget.globalIndex]?["name"], style: TextStyle(color: widget.textColor),)),
@@ -182,7 +196,7 @@ class _MediatekaListTileState extends State<MediatekaListTile> {
                     width: width * 0.1,
                     child: FittedBox(
                       fit: BoxFit.contain,
-                      child: provider.isUserMakingPlaylist ? SizedBox.shrink() :
+                      child: provider.isUserMakingPlaylist || provider.currentPlaylist == "favorite" ? SizedBox.shrink() :
                       IconButton(
                         icon: Icon(Icons.more_vert, color: widget.iconColor,),
                         onPressed: () {
@@ -275,6 +289,7 @@ class _SearchTileState extends State<SearchTile> {
     final String minutes = duration.inMinutes.toString();
     final String seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
     bool isSelected = provider.audioSourcesIds.contains(widget.globalIndex);
+    final Uint8List? artworkBytes = provider.audioFiles[widget.globalIndex]?["artwork"] as Uint8List?;
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -284,16 +299,27 @@ class _SearchTileState extends State<SearchTile> {
             border: Border.all(color: Colors.white, width: 3),
           ) : BoxDecoration(),
           child: ListTile(
-            leading: SizedBox(
-              width: width * 0.2,
-              child: provider.audioFiles[widget.globalIndex]?["picture"] != null ?
+            leading: Padding(
+              padding: EdgeInsets.only(left: width * 0.035),
+              child: SizedBox(
+                width: width * 0.13,
+                child: provider.audioFiles[widget.globalIndex]?["picture"] != null ?
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    image: DecorationImage(image: FileImage(File(provider.audioFiles[widget.globalIndex]?["picture"])), fit: BoxFit.fitWidth),
+                  ),
+                ) : artworkBytes != null ?
               Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  image: DecorationImage(image: MemoryImage(provider.audioFiles[widget.globalIndex]?["picture"].data), fit: BoxFit.fitWidth),
-                ),
-              ) :
-              Icon(Icons.music_note, color: widget.iconColor,),),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                image: DecorationImage(image: MemoryImage(artworkBytes), fit: BoxFit.fitWidth),
+              ),
+            ) :
+            Icon(Icons.music_note, color: widget.iconColor,),
+
+              ),
+            ),
             title: SizedBox(
                 width: width * 0.625,
                 child: Text(provider.audioFiles[widget.globalIndex]?["name"], style: TextStyle(color: widget.textColor),)),
@@ -391,6 +417,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
     final backgroundColor = provider.themeData["mini"]!["background"];
     final iconColor = provider.themeData["mini"]!["icon"];
     final textColor = provider.themeData["mini"]!["text"];
+    final Uint8List? artworkBytes = provider.audioFiles[provider.currentId]?["artwork"] as Uint8List?;
 
     return Container(
       color: provider.themeData["mini"]?["backgroundImage"] == null ? backgroundColor : null,
@@ -428,16 +455,22 @@ class _MiniPlayerState extends State<MiniPlayer> {
             height: screenHeight * 0.5,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              image: DecorationImage(image: MemoryImage(provider.audioFiles[provider.currentId]!["picture"].data), fit: BoxFit.cover),
+              image: DecorationImage(image: FileImage(File(provider.audioFiles[provider.currentId]?["picture"])), fit: BoxFit.fitWidth),
             ),
-          )
-              : SizedBox(
+          ) : artworkBytes != null ? Container(
+                width: screenHeight * 0.4,
+                height: screenHeight * 0.5,
+                decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                image: DecorationImage(image: MemoryImage(artworkBytes), fit: BoxFit.fitWidth),
+            ),
+          ) : SizedBox(
               width: screenHeight * 0.4,
               height: screenHeight * 0.5,
               child: FittedBox(
-                  fit: BoxFit.fitWidth,
-                  child: Icon(Icons.music_note, color: iconColor)
-            )
+                fit: BoxFit.fitWidth,
+                child: Icon(Icons.music_note, color: iconColor,)
+              )
           ),
           onTap: () {
             showDialog(
@@ -556,8 +589,12 @@ class _MiniPlayerState extends State<MiniPlayer> {
 
                 IconButton(
                     onPressed: () {
-                      provider.setLoopMode(provider.player.loopMode == LoopMode.all ? LoopMode.off : LoopMode.all);
-                      showNotification(provider.player.loopMode == LoopMode.all ? "Включён цикличный режим воспроизведения" : "Цикличный режим воспроизведения выключен");
+                      if (provider.playlists[provider.currentPlaylist]!.isNotEmpty && !provider.readyToSetAudio) {
+                        provider.setLoopMode(provider.player.loopMode == LoopMode.all ? LoopMode.off : LoopMode.all);
+                        showNotification(provider.player.loopMode == LoopMode.all ? "Включён цикличный режим воспроизведения" : "Цикличный режим воспроизведения выключен");
+                      } else {
+                        showNotification("Выберите песню из текущего плейлиста, чтобы включить цикличный режим");
+                      }
                     },
                     icon: Container(
                         padding: EdgeInsets.all(4.0),
@@ -572,12 +609,16 @@ class _MiniPlayerState extends State<MiniPlayer> {
 
                 IconButton(
                     onPressed: (){
-                      if (provider.shuffleMode) {
-                        provider.setShuffle(false);
-                        showNotification("Рандомное воспроизведение выключено");
+                      if (provider.playlists[provider.currentPlaylist]!.isNotEmpty && !provider.readyToSetAudio) {
+                        if (provider.shuffleMode) {
+                          provider.setShuffle(false);
+                          showNotification("Рандомное воспроизведение выключено");
+                        } else {
+                          provider.setShuffle(true);
+                          showNotification("Включено рандомное воспроизведение");
+                        }
                       } else {
-                        provider.setShuffle(true);
-                        showNotification("Включено рандомное воспроизведение");
+                        showNotification("Выберите песню из текущего плейлиста, чтобы включить смешанный режим");
                       }
                     },
                     icon: Container(
@@ -838,8 +879,13 @@ class _PlaylistTileState extends State<PlaylistTile> {
           Navigator.pushNamedAndRemoveUntil(widget.context, "/", (route) => false);
           provider.switchAddToExistingPlaylistFlag();
         } else {
+          if (provider.shuffleMode) {
+            provider.updateLock = true;
+            await provider.restoreDefaultOrder();
+            await provider.disableShuffle();
+            provider.updateLock = false;
+          }
           await provider.setCurrentPlaylist(name);
-          await provider.disableShuffle();
           Navigator.pushNamed(widget.context, "/");
         }
       },
@@ -986,6 +1032,7 @@ class YTSearchTile extends StatelessWidget {
 
               IconButton(
                 onPressed: () async {
+                  provider.shuffleMode ? await provider.disableShuffle() : null;
                   if (provider.player.sequenceState.currentSource?.tag.id != "f$index") {
                     if (!provider.isAudioSaved) {
                       provider.savedAudio = Map.from(provider.currentAudioInfo);

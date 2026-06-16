@@ -8,7 +8,6 @@ import 'package:mp6/ui/settings.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:mp6/provider/provider.dart';
-import 'package:metadata_god/metadata_god.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:mp6/log/logger.dart';
@@ -23,7 +22,6 @@ void main() async {
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-  MetadataGod.initialize(); // Библиотека для вытаскивания метаданных из аудио файлов
   await Hive.initFlutter(); // Библиотека для хранения данных между перезапусками
   await Hive.openBox('playerData');
 
