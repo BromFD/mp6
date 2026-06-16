@@ -1,4 +1,4 @@
-# chuni_player_revamped
+# mp6
 
 Better, faster, stronger.
 
